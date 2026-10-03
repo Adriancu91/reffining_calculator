@@ -1,27 +1,19 @@
 # Refining Calculator
 
-Calculator for e-scrap / PCB assays (Au, Ag, Pt, Pd, Rh, Cu) with live Kitco prices (**Bid** column, in **€/kg**).
+Compares the settlement of an e-scrap / PCB lot across **7 refineries** — Asahi, Dowa, PedalPoint, Hanwa, Umicore (via Green Auto Recycling), Techemet, Aurubis — with live Kitco **Bid** prices.
 
 **Site:** https://adriancu91.github.io/reffining_calculator/
 
-## What it does
-- Enter the lot, quantity (kg) and analysis (g/t for precious metals, % for Cu).
-- Calculates total metal, payable metal (yield / minimum deduction), value, refining charge, treatment, sampling and the **Total amount**.
-- Analyses are saved automatically in the browser; you can select, duplicate, delete, export/import them (.json).
-- The calculation rules (from the Excel file) can be edited in the **Calculation rules** tab.
+## How to use
+1. **Compare** tab: enter gross weight, moisture and assay (Au, Ag, Pd, Pt in g/t; Cu in %). Impurities (Al, Cr, Ni, As, Hg), max piece size and the small-lot exemption are under *Impurities & handling*.
+2. Refineries are ranked by net settlement in EUR, with €/kg (gross weight) and return (net ÷ value of all contained metal at 100 % of the live price). Tap a refinery for the full breakdown: payable metal, every charge, net in USD/EUR, advance/prepayment info and warnings.
+3. **Terms** tab: every commercial term of every refinery, editable (brackets, tiers, charges, options). Edited values are highlighted; *Reset to Excel values* restores the originals.
+4. **Prices** tab: live Kitco bid (USD), manual override per metal, EUR/USD rate (live from Kitco or locked manually), backup export/import.
 
-## Formulas
-- Deduction = max(analysis × (1 − Yield), Min. deduction)
-- Payable grade = max(0, analysis − deduction) × Metal payment %
-- Value = payable metal (kg) × Kitco bid price (€/kg)
-- Refining charge = payable metal × rate (€/kg or €/t)
-- Treatment = 550 €/dmt × dry tonnes; Sampling = 950 €/lot (< 10 MT) or 650 €/lot (≥ 10 MT)
-- Total = Σ value − Σ refining − treatment − sampling
-
-## Prices
-From the public API used by kitco.com (`kdb-gw.prod.kitco.com`), currency EUR. Gold/silver/platinum/palladium/rhodium come in €/troy oz and are converted to €/kg; copper comes in €/lb. Auto-refresh every 60 s.
+## Source and verification
+The calculation rules come from `REFINERY_COMPARISON.xlsx`. `engine.js` reproduces every refinery sheet formula; with the workbook's own prices and FX (1.161875) the results match the Excel to the cent, and also match LibreOffice recalculations of the workbook for additional test lots (high gold, platinum, impurities, small lots, alternative options).
 
 ## Files
-- `index.html` — the interface
-- `style.css` — the styling
-- `app.js` — calculations, prices and saving
+- `index.html`, `style.css` — interface
+- `engine.js` — refinery calculation engine (all terms + formulas)
+- `app.js` — lots, comparison, terms editor, Kitco prices, saving

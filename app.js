@@ -1,423 +1,476 @@
-/* Refining Calculator — calculation logic and live Kitco prices */
+/* Refining Calculator — UI: lots, refinery comparison, editable terms, live Kitco prices */
 (function () {
   "use strict";
-
-  const METALS = ["au", "ag", "pt", "pd", "rh", "cu"];
-  const NAMES = { au: "Au", ag: "Ag", pt: "Pt", pd: "Pd", rh: "Rh", cu: "Cu" };
-  const KITCO_SYMBOL = { au: "AU", ag: "AG", pt: "PT", pd: "PD", rh: "RH", cu: "CU" };
-  const OZ_PER_KG = 1000 / 31.1034768;   // troy ounces per kg
-  const LB_PER_KG = 1 / 0.45359237;      // pounds per kg
+  const E = window.RefEngine;
+  const REFS = E.REFINERIES;
+  const TOZ = E.TOZ;
+  const METALS = ["au", "ag", "pd", "pt", "cu"];
+  const MN = { au: "Au", ag: "Ag", pd: "Pd", pt: "Pt", cu: "Cu" };
+  const FULL = { au: "gold", ag: "silver", pd: "palladium", pt: "platinum", cu: "copper" };
   const KITCO_URL = "https://kdb-gw.prod.kitco.com/";
   const REFRESH_MS = 60 * 1000;
 
-  // Values from the Excel file (REFFINING CATALOG — calculation rules)
-  const DEFAULT_RULES = {
-    defaultMT: 10,
-    samplingThresholdMT: 10,
-    treatment: 550,       // €/dmt
-    samplingSmall: 950,   // €/lot < 10 MT
-    samplingLarge: 650,   // €/lot ≥ 10 MT
-    metals: {
-      au: { pay: 100, yield: 98, minDed: 8,   chargeVal: 180, chargeUnit: "eur_kg" },
-      ag: { pay: 100, yield: 98, minDed: 125, chargeVal: 18,  chargeUnit: "eur_kg" },
-      pt: { pay: 100, yield: 85, minDed: 9,   chargeVal: 500, chargeUnit: "eur_kg" }, // not in Excel → same as Pd
-      pd: { pay: 100, yield: 85, minDed: 9,   chargeVal: 500, chargeUnit: "eur_kg" },
-      rh: { pay: 100, yield: 85, minDed: 9,   chargeVal: 500, chargeUnit: "eur_kg" }, // not in Excel → same as Pd
-      cu: { pay: 100, yield: 100, minDed: 2.5, chargeVal: 475, chargeUnit: "eur_t" },
-    },
-  };
-
-  const LS_RULES = "rc_rules_v1";
-  const LS_ANALYSES = "rc_analyses_v1";
-  const LS_CURRENT = "rc_current_v1";
-  const LS_OVERRIDE = "rc_price_override_v1";
-  const LS_LASTPRICES = "rc_last_prices_v1";
-
-  // ---------- storage helpers ----------
-  const load = (k, fallback) => {
-    try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
-  };
+  // ---------- storage ----------
+  const K = { lots: "rc2_lots", cur: "rc2_current", terms: "rc2_terms", ovr: "rc2_price_override", fx: "rc2_fx", last: "rc2_last_prices", open: "rc2_open" };
+  const load = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
   const clone = (o) => JSON.parse(JSON.stringify(o));
 
-  let rules = mergeRules(load(LS_RULES, null));
-  let analyses = load(LS_ANALYSES, []);
-  let currentId = load(LS_CURRENT, null);
-  let overrides = load(LS_OVERRIDE, {});
-  let livePrices = load(LS_LASTPRICES, { prices: {}, time: null }).prices || {};
-  let livePricesTime = load(LS_LASTPRICES, { time: null }).time;
+  let lots = load(K.lots, null);
+  let currentId = load(K.cur, null);
+  let termsOv = load(K.terms, {});          // { refId: { key: value } }
+  let overrides = load(K.ovr, {});          // { au: USD/toz, ..., cu: USD/t }
+  let fxCfg = load(K.fx, { mode: "live", manual: 1.161875 });
+  let last = load(K.last, { usd: {}, fx: null, time: null });
+  let openCards = new Set(load(K.open, []));
+  let termsRef = REFS[0].id;
 
-  function mergeRules(r) {
-    const base = clone(DEFAULT_RULES);
-    if (!r) return base;
-    const out = Object.assign(base, r, { metals: base.metals });
-    METALS.forEach((m) => { out.metals[m] = Object.assign({}, base.metals[m], (r.metals || {})[m] || {}); });
-    return out;
+  // ---------- lots ----------
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const today = () => new Date().toISOString().slice(0, 10);
+  function blankLot(name) {
+    return { id: uid(), lot: name, material: "", date: today(), notes: "",
+      grossKg: 1000, moisturePct: 0, au: "", ag: "", pd: "", pt: "", cuPct: "",
+      alPct: 0, crPct: 0, niPct: 0, asPct: 0, hgPpm: 0, pieceMm: 100, exempt: false };
   }
+  if (!lots) {
+    // migrate lots from the first version of the site, if any
+    const old = load("rc_analyses_v1", []);
+    lots = old.map((a) => Object.assign(blankLot(a.lot || "lot"), {
+      id: a.id, date: a.date || today(), notes: a.notes || "", grossKg: a.qtyKg, moisturePct: a.moisture || 0,
+      au: a.grades?.au ?? "", ag: a.grades?.ag ?? "", pd: a.grades?.pd ?? "", pt: a.grades?.pt ?? "", cuPct: a.grades?.cu ?? "",
+    }));
+    if (!lots.length) {
+      // example lot = the LOT_INPUT sheet of REFINERY_COMPARISON.xlsx
+      lots = [Object.assign(blankLot("Example (Excel lot)"), { grossKg: 22000, au: 10.8, ag: 489, pd: 1, pt: 0, cuPct: 15.64, material: "PCB" })];
+    }
+    currentId = lots[0].id;
+    persistLots();
+  }
+  if (!lots.find((l) => l.id === currentId)) currentId = lots[0].id;
+  const cur = () => lots.find((l) => l.id === currentId);
+  function persistLots() { save(K.lots, lots); save(K.cur, currentId); }
+
+  const num = (v) => { const x = parseFloat(String(v ?? "").replace(",", ".")); return isFinite(x) ? x : 0; };
+  function toEngineLot(l) {
+    return { grossKg: num(l.grossKg), moisture: num(l.moisturePct) / 100,
+      au: num(l.au), ag: num(l.ag), pd: num(l.pd), pt: num(l.pt), cu: num(l.cuPct) / 100,
+      al: num(l.alPct) / 100, cr: num(l.crPct) / 100, ni: num(l.niPct) / 100, as: num(l.asPct) / 100, hg: num(l.hgPpm),
+      pieceMm: num(l.pieceMm), exempt: !!l.exempt };
+  }
+
+  // ---------- prices ----------
+  // engine wants USD/g for precious metals and USD/kg for copper
+  function priceUSD() {
+    const p = {}, src = {};
+    METALS.forEach((m) => {
+      const o = overrides[m];
+      if (o !== undefined && o !== "" && num(o) > 0) { p[m] = m === "cu" ? num(o) / 1000 : num(o) / TOZ; src[m] = "manual"; }
+      else { p[m] = last.usd[m]; src[m] = "live"; }
+    });
+    return { p, src };
+  }
+  function fxRate() {
+    if (fxCfg.mode === "manual" && num(fxCfg.manual) > 0) return num(fxCfg.manual);
+    return last.fx;
+  }
+  const pricesReady = () => { const { p } = priceUSD(); return METALS.every((m) => isFinite(p[m]) && p[m] > 0) && isFinite(fxRate()) && fxRate() > 0; };
 
   // ---------- formatting ----------
   const nf = (d) => new Intl.NumberFormat("en-GB", { minimumFractionDigits: d, maximumFractionDigits: d });
-  const fmtEur = (v) => (isFinite(v) ? nf(2).format(v) + " €" : "–");
-  const fmtNum = (v, d = 2) => (isFinite(v) ? nf(d).format(v) : "–");
-  const num = (v) => { const n = parseFloat(String(v).replace(",", ".")); return isFinite(n) ? n : 0; };
-  function fmtMass(kg) {
-    if (!isFinite(kg)) return "–";
-    if (kg === 0) return "0";
-    if (Math.abs(kg) < 1) return fmtNum(kg * 1000, 2) + " g";
-    if (Math.abs(kg) >= 1000) return fmtNum(kg / 1000, 3) + " t";
-    return fmtNum(kg, 3) + " kg";
+  const f0 = (v) => (isFinite(v) ? nf(0).format(v) : "–");
+  const f2 = (v) => (isFinite(v) ? nf(2).format(v) : "–");
+  const fN = (v, d) => (isFinite(v) ? nf(d).format(v) : "–");
+  const money = (v, c) => (isFinite(v) ? (v < 0 ? "−" : "") + (c === "USD" ? "$" : "€") + nf(2).format(Math.abs(v)) : "–");
+  const money0 = (v, c) => (isFinite(v) ? (v < 0 ? "−" : "") + (c === "USD" ? "$" : "€") + nf(0).format(Math.abs(v)) : "–");
+  const pctS = (f, d = 1) => (isFinite(f) ? nf(d).format(f * 100) + " %" : "–");
+  function mass(qty, unit) {
+    if (!isFinite(qty)) return "–";
+    if (unit === "kg") return qty >= 1000 ? fN(qty / 1000, 3) + " t" : fN(qty, 1) + " kg";
+    return qty >= 1000 ? fN(qty / 1000, 3) + " kg" : fN(qty, 2) + " g";
   }
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-  // ---------- analyses ----------
-  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  const today = () => new Date().toISOString().slice(0, 10);
-
-  function newAnalysis() {
-    const a = {
-      id: uid(),
-      lot: "lot#" + (analyses.length + 1),
-      qtyKg: rules.defaultMT * 1000,
-      moisture: 0,
-      date: today(),
-      notes: "",
-      grades: { au: "", ag: "", pt: "", pd: "", rh: "", cu: "" },
-    };
-    analyses.unshift(a);
-    currentId = a.id;
-    persist();
-    return a;
-  }
-  const current = () => analyses.find((a) => a.id === currentId);
-  function persist() {
-    save(LS_ANALYSES, analyses);
-    save(LS_CURRENT, currentId);
-  }
-
-  // ---------- calculation ----------
-  function priceFor(m) {
-    const o = overrides[m];
-    if (o !== undefined && o !== "" && isFinite(num(o)) && num(o) > 0) return { v: num(o), manual: true };
-    return { v: livePrices[m], manual: false };
-  }
-
-  function calculate(a) {
-    const wetT = num(a.qtyKg) / 1000;
-    const dryT = wetT * (1 - num(a.moisture) / 100);
-    const per = {};
-    let sumValue = 0, sumRefine = 0;
-
-    METALS.forEach((m) => {
-      const r = rules.metals[m];
-      const grade = num(a.grades[m]);                       // g/t or %
-      const deduction = Math.max(grade * (1 - num(r.yield) / 100), num(r.minDed));
-      const payGrade = Math.max(0, grade - deduction) * (num(r.pay) / 100);
-
-      // metal content in kg
-      const toKg = m === "cu" ? (g) => (g / 100) * dryT * 1000 : (g) => (g * dryT) / 1000;
-      const contentKg = toKg(grade);
-      const payableKg = toKg(payGrade);
-
-      const price = priceFor(m).v;
-      const value = isFinite(price) ? payableKg * price : NaN;
-      const refine = r.chargeUnit === "eur_t" ? (payableKg / 1000) * num(r.chargeVal) : payableKg * num(r.chargeVal);
-      const net = value - refine;
-
-      per[m] = { grade, payGrade, contentKg, payableKg, value, refine, net, price };
-      if (isFinite(value)) sumValue += value;
-      sumRefine += refine;
-    });
-
-    const treatment = dryT * num(rules.treatment);
-    const sampling = wetT <= 0 ? 0 : wetT < num(rules.samplingThresholdMT) ? num(rules.samplingSmall) : num(rules.samplingLarge);
-    const total = sumValue - sumRefine - treatment - sampling;
-    const missingPrice = METALS.some((m) => per[m].grade > 0 && !isFinite(per[m].price));
-
-    return { wetT, dryT, per, sumValue, sumRefine, treatment, sampling, total, missingPrice };
-  }
-
-  // ---------- DOM ----------
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
 
-  const inLot = $("#inLot"), inQty = $("#inQty"), inMoist = $("#inMoist"), inDate = $("#inDate"), inNotes = $("#inNotes");
-  const selAnalysis = $("#selAnalysis");
-
-  // Phone layout: one card per metal instead of the wide table
-  const FULL = { au: "gold", ag: "silver", pt: "platinum", pd: "palladium", rh: "rhodium", cu: "copper" };
-  (function buildMobileCards() {
-    const wrap = $("#mCards");
-    METALS.forEach((m) => {
-      const card = document.createElement("div");
-      card.className = "mcard";
-      card.dataset.m = m;
-      card.innerHTML = `
-        <div class="mtop">
-          <div class="mname"><b>${NAMES[m]}</b><span>${FULL[m]}</span></div>
-          <div class="minput"><input data-a="${m}" type="number" min="0" step="any" inputmode="decimal" placeholder="0"><i>${m === "cu" ? "%" : "g/t"}</i></div>
-        </div>
-        <div class="mprice">Live <b data-k="price"></b> €/kg</div>
-        <dl>
-          <dt>Total metal</dt><dd data-k="total"></dd>
-          <dt>Payable</dt><dd data-k="payable"></dd>
-          <dt>Metal value</dt><dd data-k="value"></dd>
-          <dt>Refining</dt><dd data-k="refine" class="neg"></dd>
-        </dl>
-        <div class="mnet"><span>Net</span><b data-k="net"></b></div>`;
-      wrap.appendChild(card);
-    });
-  })();
-
+  // ================= LOT FORM =================
+  const FIELDS = ["lot", "material", "grossKg", "moisturePct", "au", "ag", "pd", "pt", "cuPct", "alPct", "crPct", "niPct", "asPct", "hgPpm", "pieceMm", "date", "notes"];
   function fillSelect() {
-    selAnalysis.innerHTML = "";
-    analyses.forEach((a) => {
+    const s = $("#selLot"); s.innerHTML = "";
+    lots.forEach((l) => {
       const o = document.createElement("option");
-      o.value = a.id;
-      o.textContent = `${a.lot || "(no name)"} · ${fmtNum(num(a.qtyKg), 0)} kg${a.date ? " · " + a.date : ""}`;
-      if (a.id === currentId) o.selected = true;
-      selAnalysis.appendChild(o);
+      o.value = l.id;
+      o.textContent = `${l.lot || "(no name)"} · ${f0(num(l.grossKg))} kg${l.date ? " · " + l.date : ""}`;
+      o.selected = l.id === currentId;
+      s.appendChild(o);
     });
   }
-
-  function loadIntoForm() {
-    const a = current();
-    inLot.value = a.lot || "";
-    inQty.value = a.qtyKg ?? "";
-    inMoist.value = a.moisture ?? 0;
-    inDate.value = a.date || "";
-    inNotes.value = a.notes || "";
-    $$("[data-a]").forEach((inp) => { inp.value = a.grades[inp.dataset.a] ?? ""; });
+  function loadForm() {
+    const l = cur();
+    FIELDS.forEach((k) => { $("#f_" + k).value = l[k] ?? ""; });
+    $("#f_exempt").checked = !!l.exempt;
+    updateMoreHint();
   }
-
-  function setRow(cls, fn) {
-    $$(`.${cls} td[data-m]`).forEach((td) => { td.innerHTML = fn(td.dataset.m); });
+  function updateMoreHint() {
+    const l = cur();
+    const set = ["alPct", "crPct", "niPct", "asPct", "hgPpm"].filter((k) => num(l[k]) > 0).length;
+    $("#moreHint").textContent = `piece ${f0(num(l.pieceMm))} mm${set ? ` · ${set} impurit${set > 1 ? "ies" : "y"} set` : ""}${l.exempt ? " · exempt" : ""}`;
   }
-
-  function render() {
-    const a = current();
-    const c = calculate(a);
-
-    setRow("r-price", (m) => {
-      const p = priceFor(m);
-      return isFinite(p.v) ? fmtNum(p.v, 2) : "–";
-    });
-    $$(".r-price td[data-m]").forEach((td) => td.classList.toggle("manual", priceFor(td.dataset.m).manual));
-    setRow("r-total", (m) => fmtMass(c.per[m].contentKg));
-    setRow("r-payable", (m) => {
-      const p = c.per[m];
-      const unit = m === "cu" ? "%" : "g/t";
-      return `${fmtMass(p.payableKg)}<small>${fmtNum(p.payGrade, m === "cu" ? 2 : 1)} ${unit}</small>`;
-    });
-    setRow("r-value", (m) => fmtEur(c.per[m].value));
-    setRow("r-refine", (m) => (c.per[m].refine ? "−" + fmtEur(c.per[m].refine) : fmtEur(0)));
-    setRow("r-net", (m) => fmtEur(c.per[m].net));
-
-    $("#sValue").textContent = fmtEur(c.sumValue);
-    $("#sRefine").textContent = "−" + fmtEur(c.sumRefine);
-    $("#sTreatLbl").textContent = `Treatment (${fmtNum(c.dryT, 3)} dmt × ${fmtNum(num(rules.treatment), 0)} €)`;
-    $("#sTreat").textContent = "−" + fmtEur(c.treatment);
-    $("#sSampLbl").textContent = `Sampling (lot ${c.wetT < num(rules.samplingThresholdMT) ? "<" : "≥"} ${fmtNum(num(rules.samplingThresholdMT), 0)} MT)`;
-    $("#sSamp").textContent = "−" + fmtEur(c.sampling);
-    const tot = $("#sTotal");
-    tot.textContent = fmtEur(c.total);
-    tot.classList.toggle("negative", c.total < 0);
-    $("#sPerKg").textContent = c.missingPrice
-      ? "Missing price for an analysed metal"
-      : c.wetT > 0 ? `${fmtNum(c.total / (c.wetT * 1000), 3)} €/kg material` : "";
-
-    // phone cards
-    METALS.forEach((m) => {
-      const card = $(`.mcard[data-m="${m}"]`);
-      const p = c.per[m], pr = priceFor(m);
-      const set = (k, v) => { $(`[data-k="${k}"]`, card).textContent = v; };
-      set("price", isFinite(pr.v) ? fmtNum(pr.v, 2) + (pr.manual ? " ✎" : "") : "–");
-      set("total", fmtMass(p.contentKg));
-      set("payable", `${fmtMass(p.payableKg)} · ${fmtNum(p.payGrade, m === "cu" ? 2 : 1)} ${m === "cu" ? "%" : "g/t"}`);
-      set("value", fmtEur(p.value));
-      set("refine", p.refine ? "−" + fmtEur(p.refine) : fmtEur(0));
-      set("net", fmtEur(p.net));
-      card.classList.toggle("empty", !(p.grade > 0));
-    });
-    const bar = $("#mTotalVal");
-    bar.textContent = fmtEur(c.total);
-    bar.classList.toggle("negative", c.total < 0);
-
-    renderOverrideTable();
-  }
-
-  // form listeners
-  function updateField(fn) {
-    const a = current(); fn(a); persist(); render(); fillSelect();
-  }
-  inLot.addEventListener("input", () => updateField((a) => (a.lot = inLot.value)));
-  inQty.addEventListener("input", () => updateField((a) => (a.qtyKg = inQty.value)));
-  inMoist.addEventListener("input", () => updateField((a) => (a.moisture = inMoist.value)));
-  inDate.addEventListener("input", () => updateField((a) => (a.date = inDate.value)));
-  inNotes.addEventListener("input", () => updateField((a) => (a.notes = inNotes.value)));
-  $$("[data-a]").forEach((inp) => inp.addEventListener("input", () => {
-    // keep the desktop table and phone cards in sync
-    $$(`[data-a="${inp.dataset.a}"]`).forEach((o) => { if (o !== inp) o.value = inp.value; });
-    updateField((a) => (a.grades[inp.dataset.a] = inp.value));
+  FIELDS.forEach((k) => $("#f_" + k).addEventListener("input", (e) => {
+    cur()[k] = e.target.value; persistLots(); updateMoreHint();
+    if (k === "lot" || k === "grossKg" || k === "date") fillSelect();
+    render();
   }));
-  $("#mTotalBar").addEventListener("click", () => $(".summary").scrollIntoView({ behavior: "smooth", block: "center" }));
-
-  selAnalysis.addEventListener("change", () => { currentId = selAnalysis.value; persist(); loadIntoForm(); render(); });
-  $("#btnNew").addEventListener("click", () => { newAnalysis(); fillSelect(); loadIntoForm(); render(); inLot.focus(); inLot.select(); });
+  $("#f_exempt").addEventListener("change", (e) => { cur().exempt = e.target.checked; persistLots(); updateMoreHint(); render(); });
+  $("#selLot").addEventListener("change", (e) => { currentId = e.target.value; persistLots(); loadForm(); render(); });
+  $("#btnNew").addEventListener("click", () => {
+    const l = blankLot("lot#" + (lots.length + 1)); lots.unshift(l); currentId = l.id; persistLots(); fillSelect(); loadForm(); render();
+    $("#f_lot").focus(); $("#f_lot").select();
+  });
   $("#btnDup").addEventListener("click", () => {
-    const a = clone(current()); a.id = uid(); a.lot = (a.lot || "") + " (copy)"; a.date = today();
-    analyses.unshift(a); currentId = a.id; persist(); fillSelect(); loadIntoForm(); render();
+    const l = clone(cur()); l.id = uid(); l.lot = (l.lot || "") + " (copy)"; l.date = today();
+    lots.unshift(l); currentId = l.id; persistLots(); fillSelect(); loadForm(); render();
   });
   $("#btnDel").addEventListener("click", () => {
-    const a = current();
-    if (!confirm(`Delete analysis "${a.lot}"?`)) return;
-    analyses = analyses.filter((x) => x.id !== a.id);
-    if (!analyses.length) newAnalysis(); else currentId = analyses[0].id;
-    persist(); fillSelect(); loadIntoForm(); render();
+    const l = cur(); if (!confirm(`Delete lot "${l.lot}"?`)) return;
+    lots = lots.filter((x) => x.id !== l.id);
+    if (!lots.length) lots.push(blankLot("lot#1"));
+    currentId = lots[0].id; persistLots(); fillSelect(); loadForm(); render();
   });
 
-  // tabs
-  $$(".tab").forEach((t) => t.addEventListener("click", () => {
-    $$(".tab").forEach((x) => x.classList.toggle("active", x === t));
-    $$(".tabpanel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + t.dataset.tab));
-    document.body.classList.toggle("on-rules", t.dataset.tab === "rules");
-  }));
-
-  // ---------- rules UI ----------
-  function buildRulesUI() {
-    const tb = $("#metalRules tbody");
-    tb.innerHTML = "";
-    METALS.forEach((m) => {
-      const r = rules.metals[m];
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td class="mt-name"><b>${NAMES[m]}</b> <span>${FULL[m]}</span></td>
-        <td data-label="Payment %"><input data-r="${m}.pay" type="number" step="any" value="${r.pay}"></td>
-        <td data-label="Yield %"><input data-r="${m}.yield" type="number" step="any" value="${r.yield}"></td>
-        <td data-label="Min. deduction"><input data-r="${m}.minDed" type="number" step="any" value="${r.minDed}"></td>
-        <td data-label="Deduction unit">${m === "cu" ? "%-points" : "g/t"}</td>
-        <td data-label="Refining charge"><input data-r="${m}.chargeVal" type="number" step="any" value="${r.chargeVal}"></td>
-        <td data-label="Charge unit"><select data-r="${m}.chargeUnit">
-              <option value="eur_kg"${r.chargeUnit === "eur_kg" ? " selected" : ""}>€/kg metal</option>
-              <option value="eur_t"${r.chargeUnit === "eur_t" ? " selected" : ""}>€/t metal</option>
-            </select></td>`;
-      tb.appendChild(tr);
-    });
-    $$("[data-r]").forEach((el) => el.addEventListener("input", () => {
-      const [m, k] = el.dataset.r.split(".");
-      rules.metals[m][k] = k === "chargeUnit" ? el.value : el.value === "" ? 0 : num(el.value);
-      save(LS_RULES, rules); render();
-    }));
-    $$("[data-s]").forEach((el) => {
-      el.value = rules[el.dataset.s];
-      el.oninput = () => { rules[el.dataset.s] = num(el.value); save(LS_RULES, rules); render(); };
-    });
-  }
-  $("#btnResetRules").addEventListener("click", () => {
-    if (!confirm("Reset all rules to the Excel values?")) return;
-    rules = clone(DEFAULT_RULES); save(LS_RULES, rules); buildRulesUI(); render();
-  });
-
-  function renderOverrideTable() {
-    const tb = $("#overrideTable tbody");
-    if (!tb.children.length) {
-      METALS.forEach((m) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td><b>${NAMES[m]}</b></td><td data-live="${m}"></td>
-          <td><input data-o="${m}" type="number" step="any" placeholder="live" value="${overrides[m] ?? ""}"></td>`;
-        tb.appendChild(tr);
-      });
-      $$("[data-o]").forEach((el) => el.addEventListener("input", () => {
-        if (el.value === "") delete overrides[el.dataset.o]; else overrides[el.dataset.o] = el.value;
-        save(LS_OVERRIDE, overrides); render();
-      }));
+  // ================= COMPARISON =================
+  function render() {
+    renderPriceBits();
+    const rank = $("#ranking");
+    const l = cur();
+    const L = E.prepareLot(toEngineLot(l));
+    $("#weights").innerHTML = L.grossKg > 0
+      ? `<span>Gross <b>${f0(L.grossKg)} kg</b></span><span>Dry <b>${fN(L.dmt, 3)} dmt</b></span>${num(l.moisturePct) ? `<span>Moisture <b>${fN(num(l.moisturePct), 2)} %</b></span>` : ""}`
+      : "";
+    if (!pricesReady()) {
+      rank.innerHTML = `<div class="card empty">Waiting for metal prices… If this persists, enter prices manually on the <b>Prices</b> tab.</div>`;
+      setBest(null); return;
     }
-    $$("[data-live]").forEach((td) => { td.textContent = fmtNum(livePrices[td.dataset.live], 2); });
+    if (!(L.grossKg > 0)) { rank.innerHTML = `<div class="card empty">Enter the gross weight of the lot.</div>`; setBest(null); return; }
+
+    const { p } = priceUSD();
+    const fx = fxRate();
+    const results = E.runAll(toEngineLot(l), p, fx, termsOv).sort((a, b) => b.netEUR - a.netEUR);
+    const best = results[0];
+    const maxNet = Math.max(...results.map((r) => r.netEUR), 1);
+
+    rank.innerHTML = results.map((r, i) => cardHTML(r, i, best, maxNet)).join("");
+    $$(".rcard", rank).forEach((el) => {
+      $(".rhead", el).addEventListener("click", () => {
+        const id = el.dataset.id;
+        el.classList.toggle("open");
+        if (el.classList.contains("open")) openCards.add(id); else openCards.delete(id);
+        save(K.open, [...openCards]);
+      });
+      const eb = $(".editterms", el);
+      if (eb) eb.addEventListener("click", (ev) => { ev.stopPropagation(); termsRef = el.dataset.id; switchTab("terms"); });
+    });
+    setBest(best);
   }
 
-  // ---------- backup ----------
+  function cardHTML(r, i, best, maxNet) {
+    const isBest = i === 0 && r.netEUR > 0;
+    const diff = r.netEUR - best.netEUR;
+    const barW = Math.max(0, Math.min(100, (r.netEUR / maxNet) * 100));
+    const warn = r.warnings.map((w) => `<span class="warn">${esc(w)}</span>`).join("");
+    const ref = REFS.find((x) => x.id === r.id);
+    const modified = termsOv[r.id] && Object.keys(termsOv[r.id]).length;
+    const payRow = ref.paid.map((m) => {
+      const x = r.metals[m];
+      return x && x.assay > 0 ? `<span><b>${MN[m]}</b> ${pctS(x.payPct, 0)}</span>` : "";
+    }).join("");
+
+    const metalRows = Object.entries(r.metals).map(([m, x]) => `
+      <tr${x.assay > 0 ? "" : ' class="zero"'}>
+        <td><b>${MN[m]}</b><small>${esc(x.rule)}</small></td>
+        <td>${m === "cu" ? fN(x.assay * 100, 2) + " %" : fN(x.assay, 2)}</td>
+        <td>${m === "cu" ? fN(x.payGrade * 100, 3) + " %" : fN(x.payGrade, 2)}<small>${pctS(x.payPct, 1)}</small></td>
+        <td>${mass(x.qty, x.qtyUnit)}</td>
+        <td>${money(x.value, r.currency)}</td>
+      </tr>`).join("");
+    const active = r.charges.filter((c) => Math.abs(c.amount) > 1e-9);
+    const idle = r.charges.filter((c) => Math.abs(c.amount) <= 1e-9);
+    const chargeRows = active.map((c) => `<li><span>${esc(c.label)}<small>${esc(c.note)}</small></span><b>−${money(c.amount, r.currency).replace("−", "")}</b></li>`).join("");
+    const idleTxt = idle.length ? `<p class="idle">Not charged: ${idle.map((c) => esc(c.label.replace(" charge", "").replace(" refining", " R/C"))).join(", ")}</p>` : "";
+    const info = r.info.map(([k, v, c]) => `<li><span>${esc(k)}</span><b>${money(v, c)}</b></li>`).join("");
+
+    return `
+    <article class="rcard${isBest ? " best" : ""}${openCards.has(r.id) ? " open" : ""}" data-id="${r.id}">
+      <button class="rhead" type="button" aria-expanded="${openCards.has(r.id)}">
+        <span class="rank">${i + 1}</span>
+        <span class="rname">${esc(r.name)}
+          <small>${r.currency} contract${r.badge ? " · " + esc(r.badge) : ""}${modified ? " · terms edited" : ""}</small>
+        </span>
+        <span class="rnet">${money0(r.netEUR, "EUR")}
+          <small>${fN(r.eurPerKg, 3)} €/kg · ${pctS(r.returnRate, 1)}</small>
+        </span>
+        <span class="chev" aria-hidden="true">›</span>
+      </button>
+      <div class="rbar"><i style="width:${barW}%"></i></div>
+      <div class="rsub">
+        <span class="pay">${payRow || "<span>nothing payable</span>"}</span>
+        ${i > 0 ? `<span class="gap">${money0(diff, "EUR")} vs #1</span>` : isBest ? '<span class="tag">Best offer</span>' : ""}
+      </div>
+      ${warn ? `<div class="warns">${warn}</div>` : ""}
+      <div class="rbody">
+        <div class="table-wrap">
+          <table class="mt">
+            <thead><tr><th>Metal</th><th>Assay</th><th>Payable</th><th>Qty</th><th>Value</th></tr></thead>
+            <tbody>${metalRows}</tbody>
+          </table>
+        </div>
+        <ul class="lines">
+          <li class="sum"><span>Gross payable metal value</span><b>${money(r.gross, r.currency)}</b></li>
+          ${chargeRows}
+          <li class="sum"><span>Total charges</span><b>−${money(r.totalCharges, r.currency).replace("−", "")}</b></li>
+          <li class="net"><span>Net settlement</span><b>${money(r.net, r.currency)}</b></li>
+          ${r.currency === "USD" ? `<li><span>Net in EUR</span><b>${money(r.netEUR, "EUR")}</b></li>` : `<li><span>Net in USD</span><b>${money(r.netUSD, "USD")}</b></li>`}
+          <li><span>Net per dmt</span><b>${money(r.eurPerDmt, "EUR")}</b></li>
+          ${info}
+        </ul>
+        ${idleTxt}
+        <button class="btn ghost editterms" type="button">View / edit ${esc(r.name)} terms</button>
+      </div>
+    </article>`;
+  }
+
+  function setBest(best) {
+    const bar = $("#bestBar");
+    if (!best) { bar.classList.add("hidden"); return; }
+    bar.classList.remove("hidden");
+    $("#bestLbl").textContent = "Best · " + best.name;
+    $("#bestVal").textContent = money0(best.netEUR, "EUR");
+  }
+  $("#bestBar").addEventListener("click", () => { switchTab("calc"); $("#ranking").scrollIntoView({ behavior: "smooth", block: "start" }); });
+
+  // ================= TERMS =================
+  function T(refId) { const r = REFS.find((x) => x.id === refId); return Object.assign(clone(r.defaults), termsOv[refId] || {}); }
+  function setTerm(refId, key, val) {
+    const def = REFS.find((x) => x.id === refId).defaults[key];
+    termsOv[refId] = termsOv[refId] || {};
+    if (JSON.stringify(def) === JSON.stringify(val)) delete termsOv[refId][key]; else termsOv[refId][key] = val;
+    if (!Object.keys(termsOv[refId]).length) delete termsOv[refId];
+    save(K.terms, termsOv);
+    renderRefChips();
+    render();
+  }
+  // display helpers: fractions shown as percent
+  const showPct = (v) => (v === "" || v === null || v === undefined ? "" : +(v * 100).toFixed(6));
+  const readPct = (s) => num(s) / 100;
+
+  function renderRefChips() {
+    $("#refChips").innerHTML = REFS.map((r) => {
+      const mod = termsOv[r.id] && Object.keys(termsOv[r.id]).length;
+      return `<button class="chip${r.id === termsRef ? " active" : ""}" data-ref="${r.id}">${esc(r.name)}${mod ? " •" : ""}</button>`;
+    }).join("");
+    $$("#refChips .chip").forEach((b) => b.addEventListener("click", () => { termsRef = b.dataset.ref; renderRefChips(); renderTerms(); }));
+  }
+
+  function renderTerms() {
+    const ref = REFS.find((x) => x.id === termsRef);
+    const t = T(ref.id);
+    const ov = termsOv[ref.id] || {};
+    const isMod = (k) => Object.prototype.hasOwnProperty.call(ov, k);
+    let h = `<div class="card-head"><h2>${esc(ref.name)} <small class="cur">${ref.currency} contract</small></h2>
+      <button class="btn ghost" id="btnResetRef"${Object.keys(ov).length ? "" : " disabled"}>Reset to Excel values</button></div>`;
+    h += `<ul class="notes">${ref.notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+    h += `<div class="bench"><b>Contract price benchmarks</b> (the site uses the live Kitco bid for all):
+      ${Object.entries(ref.benchmarks).map(([m, b]) => `<span><b>${MN[m]}</b> ${esc(b)}</span>`).join("")}</div>`;
+
+    ref.schema.forEach((sec) => {
+      h += `<h3>${esc(sec.title)}</h3>`;
+      if (sec.fields) {
+        h += `<div class="tfields">` + sec.fields.map(([k, label, unit, type, note]) => {
+          let input;
+          if (type.startsWith("sel:")) {
+            input = `<select data-k="${k}" data-t="sel">${type.slice(4).split(",").map((o) => `<option${t[k] === o ? " selected" : ""}>${o}</option>`).join("")}</select>`;
+          } else {
+            input = `<input data-k="${k}" data-t="${type}" type="number" step="any" inputmode="decimal" value="${type === "pct" ? showPct(t[k]) : t[k]}">`;
+          }
+          return `<label class="tf${isMod(k) ? " mod" : ""}"><span class="tl">${esc(label)}${note ? `<small>${esc(note)}</small>` : ""}</span>
+            <span class="ti">${input}<i>${esc(unit)}</i></span></label>`;
+        }).join("") + `</div>`;
+      }
+      if (sec.metals) {
+        h += `<div class="mterms">` + sec.metals.map((m) => `
+          <div class="mrow"><div class="mlabel"><b>${MN[m]}</b> ${FULL[m]}</div>
+          ${sec.cols.map(([c, label, unit, type]) => {
+            const k = `${m}_${c}`; const tp = type === "auto" ? (m === "cu" ? "pct" : "num") : type;
+            const u = type === "auto" ? (m === "cu" ? "%" : unit.split("·")[0].trim()) : unit.includes("·") ? (m === "cu" ? unit.split("·")[1].replace("Cu", "").trim() : unit.split("·")[0].trim()) : unit;
+            return `<label class="mf${isMod(k) ? " mod" : ""}"><span>${esc(label)}</span><span class="ti"><input data-k="${k}" data-t="${tp}" type="number" step="any" inputmode="decimal" value="${tp === "pct" ? showPct(t[k]) : t[k]}"><i>${esc(u)}</i></span></label>`;
+          }).join("")}</div>`).join("") + `</div>`;
+      }
+      if (sec.brackets) {
+        h += `<div class="brackets">` + sec.brackets.map(([k, m, unit, ftype]) => `
+          <div class="bt${isMod(k) ? " mod" : ""}"><div class="bth"><b>${m}</b><span>from (${unit})</span><span>rate %</span></div>
+          ${t[k].map((row, i) => `<div class="btr">
+              <input data-br="${k}" data-i="${i}" data-c="0" data-t="${ftype}" type="number" step="any" inputmode="decimal" value="${ftype === "pct" ? showPct(row[0]) : row[0]}">
+              <input data-br="${k}" data-i="${i}" data-c="1" data-t="pct" type="number" step="any" inputmode="decimal" value="${showPct(row[1])}">
+              <button class="x" data-del="${k}" data-i="${i}" title="Remove row" aria-label="Remove row">×</button></div>`).join("")}
+          <button class="btn tiny add" data-add="${k}">+ row</button></div>`).join("") + `</div>`;
+      }
+      if (sec.tiers) {
+        h += `<div class="brackets">` + sec.tiers.map(([k, m]) => `
+          <div class="bt tiers${isMod(k) ? " mod" : ""}"><div class="bth"><b>${m}</b><span>up to g/t</span><span>mode</span><span>value</span></div>
+          ${t[k].map(([upTo, mode, v], i) => `<div class="btr">
+              <input data-tier="${k}" data-i="${i}" data-c="0" type="text" inputmode="decimal" value="${upTo}">
+              <select data-tier="${k}" data-i="${i}" data-c="1"><option${mode === "DEDUCT" ? " selected" : ""}>DEDUCT</option><option${mode === "RECOVERY" ? " selected" : ""}>RECOVERY</option></select>
+              <span class="ti"><input data-tier="${k}" data-i="${i}" data-c="2" type="number" step="any" inputmode="decimal" value="${mode === "RECOVERY" ? showPct(v) : v}"><i>${mode === "RECOVERY" ? "%" : "g/t"}</i></span></div>`).join("")}
+          </div>`).join("") + `<p class="note">Last tier "up to" = ABOVE. DEDUCT value in g/t, RECOVERY value in %.</p></div>`;
+      }
+    });
+    $("#termsCard").innerHTML = h;
+
+    // wire inputs
+    $$("#termsCard [data-k]").forEach((el) => el.addEventListener("change", () => {
+      const k = el.dataset.k, tp = el.dataset.t;
+      setTerm(ref.id, k, tp === "sel" ? el.value : tp === "pct" ? readPct(el.value) : num(el.value));
+      el.closest(".tf, .mf")?.classList.add("mod");
+      $("#btnResetRef").disabled = false;
+    }));
+    $$("#termsCard [data-br]").forEach((el) => el.addEventListener("change", () => {
+      const k = el.dataset.br, i = +el.dataset.i, c = +el.dataset.c;
+      const arr = clone(T(ref.id)[k]);
+      arr[i][c] = el.dataset.t === "pct" ? readPct(el.value) : num(el.value);
+      arr.sort((a, b) => a[0] - b[0]);
+      setTerm(ref.id, k, arr); renderTerms();
+    }));
+    $$("#termsCard [data-del]").forEach((el) => el.addEventListener("click", () => {
+      const k = el.dataset.del; const arr = clone(T(ref.id)[k]); arr.splice(+el.dataset.i, 1);
+      setTerm(ref.id, k, arr); renderTerms();
+    }));
+    $$("#termsCard [data-add]").forEach((el) => el.addEventListener("click", () => {
+      const k = el.dataset.add; const arr = clone(T(ref.id)[k]); const lastRow = arr[arr.length - 1] || [0, 0];
+      arr.push([lastRow[0] * 2 || 1, lastRow[1]]); setTerm(ref.id, k, arr); renderTerms();
+    }));
+    $$("#termsCard [data-tier]").forEach((el) => el.addEventListener("change", () => {
+      const k = el.dataset.tier, i = +el.dataset.i, c = +el.dataset.c;
+      const arr = clone(T(ref.id)[k]); const row = arr[i];
+      if (c === 0) row[0] = /above/i.test(el.value) ? "ABOVE" : num(el.value);
+      if (c === 1) { row[1] = el.value; }
+      if (c === 2) row[2] = row[1] === "RECOVERY" ? readPct(el.value) : num(el.value);
+      setTerm(ref.id, k, arr); renderTerms();
+    }));
+    $("#btnResetRef").addEventListener("click", () => {
+      if (!confirm(`Reset all ${ref.name} terms to the Excel values?`)) return;
+      delete termsOv[ref.id]; save(K.terms, termsOv); renderRefChips(); renderTerms(); render();
+    });
+  }
+
+  // ================= PRICES TAB =================
+  function renderPriceBits() {
+    const { p, src } = priceUSD();
+    const fx = fxRate();
+    // chips on the compare tab
+    $("#priceChips").innerHTML = METALS.map((m) => {
+      const v = m === "cu" ? p[m] * 1000 : p[m] * TOZ;
+      return `<span class="pchip${src[m] === "manual" ? " manual" : ""}"><b>${MN[m]}</b> ${isFinite(v) ? "$" + f0(v) : "–"}<i>${m === "cu" ? "/t" : "/oz"}</i></span>`;
+    }).join("") + `<span class="pchip${fxCfg.mode === "manual" ? " manual" : ""}"><b>EUR/USD</b> ${isFinite(fx) ? fN(fx, 4) : "–"}</span>`;
+    $("#fxNow").textContent = isFinite(fx) ? fN(fx, 5) + (fxCfg.mode === "manual" ? " (manual)" : " (live)") : "–";
+  }
+  function renderPriceList() {
+    const fx = fxRate();
+    $("#priceList").innerHTML = METALS.map((m) => {
+      const live = last.usd[m];
+      const liveDisp = m === "cu" ? live * 1000 : live * TOZ;
+      const eurKg = isFinite(live) && fx ? (m === "cu" ? live : live * 1000) / fx : NaN;
+      return `<div class="prow">
+        <div class="pm"><b>${MN[m]}</b> ${FULL[m]}</div>
+        <div class="pv"><span>Live bid</span><b>${isFinite(liveDisp) ? "$" + f2(liveDisp) : "–"}</b><i>${m === "cu" ? "USD/t" : "USD/oz"}</i></div>
+        <div class="pv"><span>≈ EUR/kg</span><b>${isFinite(eurKg) ? "€" + f2(eurKg) : "–"}</b></div>
+        <label class="pv po"><span>Manual</span><input data-ovr="${m}" type="number" step="any" inputmode="decimal" placeholder="live" value="${overrides[m] ?? ""}"><i>${m === "cu" ? "USD/t" : "USD/oz"}</i></label>
+      </div>`;
+    }).join("");
+    $$("[data-ovr]").forEach((el) => el.addEventListener("change", () => {
+      if (el.value === "") delete overrides[el.dataset.ovr]; else overrides[el.dataset.ovr] = num(el.value);
+      save(K.ovr, overrides); render();
+    }));
+    $("#fxMode").value = fxCfg.mode;
+    $("#fxManual").value = fxCfg.manual;
+  }
+  $("#fxMode").addEventListener("change", (e) => { fxCfg.mode = e.target.value; save(K.fx, fxCfg); renderPriceList(); render(); });
+  $("#fxManual").addEventListener("change", (e) => { fxCfg.manual = num(e.target.value); save(K.fx, fxCfg); render(); });
+
+  async function fetchPrices() {
+    const q = `{
+      au: GetMetalQuoteV3(symbol: "AU", currency: "USD") { results { bid originalTime } }
+      ag: GetMetalQuoteV3(symbol: "AG", currency: "USD") { results { bid } }
+      pd: GetMetalQuoteV3(symbol: "PD", currency: "USD") { results { bid } }
+      pt: GetMetalQuoteV3(symbol: "PT", currency: "USD") { results { bid } }
+      cu: GetMetalQuote(symbol: "CU", currency: "USD") { results { bid unit } }
+      aueur: GetMetalQuoteV3(symbol: "AU", currency: "EUR") { results { bid } }
+    }`;
+    setStatus("", "Updating…");
+    try {
+      const res = await fetch(KITCO_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const d = (await res.json()).data || {};
+      const bid = (k) => d[k] && d[k].results && d[k].results[0] && d[k].results[0].bid;
+      const usd = {};
+      ["au", "ag", "pd", "pt"].forEach((m) => { const b = bid(m); if (isFinite(b) && b > 0) usd[m] = b / TOZ; });   // USD/oz → USD/g
+      const cu = bid("cu"); if (isFinite(cu) && cu > 0) usd.cu = cu * 2.2046226218;                            // USD/lb → USD/kg
+      const ae = bid("aueur");
+      const fx = isFinite(ae) && ae > 0 && usd.au ? bid("au") / ae : last.fx;
+      last = { usd: Object.assign({}, last.usd, usd), fx, time: (d.au && d.au.results[0] && d.au.results[0].originalTime) || new Date().toISOString() };
+      save(K.last, last);
+      setStatus("ok", "Kitco bid · " + stamp(last.time));
+    } catch (err) {
+      setStatus("err", last.time ? "Update failed — using prices from " + stamp(last.time) : "Could not load prices (" + err.message + ")");
+    }
+    renderPriceList();
+    render();
+  }
+  function setStatus(cls, txt) {
+    ["#priceDot", "#priceDot2"].forEach((s) => ($(s).className = "dot " + cls));
+    ["#priceStatus", "#priceStatus2"].forEach((s) => ($(s).textContent = txt));
+  }
+  function stamp(iso) {
+    const t = new Date(iso);
+    return isNaN(t) ? "" : t.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  $("#btnRefresh").addEventListener("click", fetchPrices);
+
+  // ================= BACKUP =================
   $("#btnExport").addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify({ analyses, rules, exported: new Date().toISOString() }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ version: 2, lots, terms: termsOv, overrides, fx: fxCfg, exported: new Date().toISOString() }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `refining-analyses-${today()}.json`;
-    a.click();
+    a.href = URL.createObjectURL(blob); a.download = `refining-calculator-${today()}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
   $("#inImport").addEventListener("change", async (e) => {
     const f = e.target.files[0]; if (!f) return;
     try {
       const data = JSON.parse(await f.text());
-      const incoming = Array.isArray(data) ? data : data.analyses || [];
-      const ids = new Set(analyses.map((a) => a.id));
-      incoming.forEach((a) => { if (!ids.has(a.id)) analyses.push(a); });
-      if (data.rules && confirm("The file also contains calculation rules. Load them too?")) {
-        rules = mergeRules(data.rules); save(LS_RULES, rules); buildRulesUI();
-      }
-      persist(); fillSelect(); render();
-      alert(`Imported: ${incoming.length} analyses.`);
+      const incoming = data.lots || [];
+      const ids = new Set(lots.map((l) => l.id));
+      incoming.forEach((l) => { if (!ids.has(l.id)) lots.push(Object.assign(blankLot(l.lot || "lot"), l)); });
+      if (data.terms && confirm("The file also contains refinery terms. Load them too?")) { termsOv = data.terms; save(K.terms, termsOv); }
+      persistLots(); fillSelect(); renderRefChips(); renderTerms(); render();
+      alert(`Imported ${incoming.length} lots.`);
     } catch (err) { alert("Invalid file: " + err.message); }
     e.target.value = "";
   });
 
-  // ---------- live prices (Kitco, Bid, EUR) ----------
-  const priceDot = $("#priceDot"), priceStatus = $("#priceStatus");
-
-  async function fetchPrices() {
-    const parts = METALS.map((m) =>
-      m === "cu"
-        ? `${m}: GetMetalQuote(symbol: "${KITCO_SYMBOL[m]}", currency: $c) { results { bid unit originalTime } }`
-        : `${m}: GetMetalQuoteV3(symbol: "${KITCO_SYMBOL[m]}", currency: $c) { results { bid unit originalTime } }`
-    ).join("\n");
-    const query = `query ($c: String!) {\n${parts}\n}`;
-    priceStatus.textContent = "Updating…";
-    try {
-      const res = await fetch(KITCO_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, variables: { c: "EUR" } }),
-      });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const json = await res.json();
-      const d = json.data || {};
-      let newest = null;
-      METALS.forEach((m) => {
-        const r = d[m] && d[m].results && d[m].results[0];
-        if (!r || !isFinite(r.bid)) return;
-        const unit = String(r.unit || "").toUpperCase();
-        const perKg = unit === "POUND" ? r.bid * LB_PER_KG
-                    : unit === "KILO" || unit === "KILOGRAM" ? r.bid
-                    : unit === "GRAM" ? r.bid * 1000
-                    : r.bid * OZ_PER_KG; // OUNCE (troy)
-        livePrices[m] = perKg;
-        if (r.originalTime && (!newest || r.originalTime > newest)) newest = r.originalTime;
-      });
-      livePricesTime = newest || new Date().toISOString();
-      save(LS_LASTPRICES, { prices: livePrices, time: livePricesTime });
-      priceDot.className = "dot ok";
-      priceStatus.textContent = "Kitco bid · " + stamp(livePricesTime);
-    } catch (err) {
-      priceDot.className = "dot err";
-      priceStatus.textContent = livePricesTime
-        ? "Update failed — last prices: " + stamp(livePricesTime)
-        : "Could not load prices (" + err.message + ")";
-    }
-    render();
+  // ================= TABS =================
+  function switchTab(name) {
+    $$(".tab").forEach((x) => x.classList.toggle("active", x.dataset.tab === name));
+    $$(".tabpanel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + name));
+    document.body.dataset.tab = name;
+    if (name === "terms") { renderRefChips(); renderTerms(); }
+    if (name === "prices") renderPriceList();
+    window.scrollTo({ top: 0 });
   }
-  function stamp(iso) {
-    const t = new Date(iso);
-    return isNaN(t) ? "" : t.toLocaleString("en-GB", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  }
-  $("#btnRefresh").addEventListener("click", fetchPrices);
+  $$(".tab").forEach((t) => t.addEventListener("click", () => switchTab(t.dataset.tab)));
 
-  // ---------- init ----------
-  if (!analyses.length) newAnalysis();
-  if (!current()) { currentId = analyses[0].id; persist(); }
-  buildRulesUI();
-  fillSelect();
-  loadIntoForm();
-  render();
+  // ================= INIT =================
+  document.body.dataset.tab = "calc";
+  fillSelect(); loadForm(); renderRefChips(); renderPriceList(); render();
   fetchPrices();
   setInterval(fetchPrices, REFRESH_MS);
-
-  // exposed for testing
-  window.__rc = { calculate, rules: () => rules, livePrices: () => livePrices };
 })();

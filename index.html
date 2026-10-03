@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Refining Calculator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,213 +15,129 @@
       <span class="logo">⬡</span>
       <div>
         <h1>Refining Calculator</h1>
-        <p class="sub">E-scrap / PCB assay calculator · live Kitco prices (Bid, €/kg)</p>
+        <p class="sub">E-scrap / PCB lots · 7 refineries compared · live Kitco prices</p>
       </div>
     </div>
     <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="calc" role="tab">Calculator</button>
-      <button class="tab" data-tab="rules" role="tab">Calculation rules</button>
+      <button class="tab active" data-tab="calc" role="tab">Compare</button>
+      <button class="tab" data-tab="terms" role="tab">Terms</button>
+      <button class="tab" data-tab="prices" role="tab">Prices</button>
     </nav>
   </header>
 
   <main>
-    <!-- ================= CALCULATOR ================= -->
+    <!-- ================= COMPARE ================= -->
     <section id="tab-calc" class="tabpanel active">
       <div class="layout">
-        <aside class="side card">
-          <button id="btnNew" class="btn primary block">+ New analysis</button>
-
-          <label class="field">
-            <span>Select analysis</span>
-            <select id="selAnalysis"></select>
-          </label>
-
-          <div class="divider"></div>
-
-          <label class="field">
-            <span>Lot</span>
-            <input id="inLot" type="text" placeholder="e.g. lot#2243">
-          </label>
-          <div class="pair">
-          <label class="field">
-            <span>Quantity (kg)</span>
-            <input id="inQty" type="number" min="0" step="any" inputmode="decimal">
-          </label>
-          <label class="field">
-            <span>Moisture (%)</span>
-            <input id="inMoist" type="number" min="0" max="100" step="any" inputmode="decimal">
-          </label>
+        <aside class="card lotcard">
+          <div class="lot-actions">
+            <select id="selLot" aria-label="Saved lots"></select>
+            <button id="btnNew" class="btn primary">+ New</button>
           </div>
-          <label class="field">
-            <span>Date</span>
-            <input id="inDate" type="date">
-          </label>
-          <label class="field">
-            <span>Notes</span>
-            <textarea id="inNotes" rows="2" placeholder="supplier, material type…"></textarea>
-          </label>
+
+          <div class="grid2">
+            <label class="field"><span>Lot ID</span><input id="f_lot" type="text" placeholder="e.g. lot#2243"></label>
+            <label class="field"><span>Material</span><input id="f_material" type="text" placeholder="e.g. PCB mix"></label>
+            <label class="field"><span>Gross weight <i>kg</i></span><input id="f_grossKg" type="number" min="0" step="any" inputmode="decimal"></label>
+            <label class="field"><span>Moisture <i>%</i></span><input id="f_moisturePct" type="number" min="0" max="100" step="any" inputmode="decimal"></label>
+          </div>
+
+          <h3>Assay</h3>
+          <div class="grid-assay">
+            <label class="field metal"><span><b>Au</b> gold <i>g/t</i></span><input id="f_au" type="number" min="0" step="any" inputmode="decimal"></label>
+            <label class="field metal"><span><b>Ag</b> silver <i>g/t</i></span><input id="f_ag" type="number" min="0" step="any" inputmode="decimal"></label>
+            <label class="field metal"><span><b>Pd</b> palladium <i>g/t</i></span><input id="f_pd" type="number" min="0" step="any" inputmode="decimal"></label>
+            <label class="field metal"><span><b>Pt</b> platinum <i>g/t</i></span><input id="f_pt" type="number" min="0" step="any" inputmode="decimal"></label>
+            <label class="field metal"><span><b>Cu</b> copper <i>%</i></span><input id="f_cuPct" type="number" min="0" max="100" step="any" inputmode="decimal"></label>
+          </div>
+
+          <details class="more" id="moreBox">
+            <summary>Impurities &amp; handling <small id="moreHint"></small></summary>
+            <div class="grid2">
+              <label class="field"><span>Al <i>%</i> <em>Hanwa</em></span><input id="f_alPct" type="number" min="0" step="any" inputmode="decimal"></label>
+              <label class="field"><span>Cr <i>%</i> <em>Hanwa</em></span><input id="f_crPct" type="number" min="0" step="any" inputmode="decimal"></label>
+              <label class="field"><span>Ni <i>%</i> <em>Umicore</em></span><input id="f_niPct" type="number" min="0" step="any" inputmode="decimal"></label>
+              <label class="field"><span>As <i>%</i> <em>Techemet</em></span><input id="f_asPct" type="number" min="0" step="any" inputmode="decimal"></label>
+              <label class="field"><span>Hg <i>ppm</i> <em>Techemet</em></span><input id="f_hgPpm" type="number" min="0" step="any" inputmode="decimal"></label>
+              <label class="field"><span>Max piece size <i>mm</i></span><input id="f_pieceMm" type="number" min="0" step="any" inputmode="decimal"></label>
+            </div>
+            <label class="check"><input id="f_exempt" type="checkbox"> Small-lot exempt item (CPU / RAM / IC chip / memory) <em>Hanwa</em></label>
+          </details>
+
+          <details class="more">
+            <summary>Date &amp; notes</summary>
+            <div class="grid2">
+              <label class="field"><span>Assay / settlement date</span><input id="f_date" type="date"></label>
+              <label class="field"><span>Notes</span><input id="f_notes" type="text" placeholder="supplier…"></label>
+            </div>
+          </details>
 
           <div class="row-btns">
             <button id="btnDup" class="btn ghost">Duplicate</button>
             <button id="btnDel" class="btn ghost danger">Delete</button>
           </div>
-          <p class="saved-hint" id="savedHint">Saved automatically in this browser</p>
         </aside>
 
-        <div class="maincol">
-          <div class="card">
-            <div class="card-head">
-              <h2>Real-time analysis calculator</h2>
-              <div class="price-status">
-                <span id="priceDot" class="dot"></span>
-                <span id="priceStatus">Loading prices…</span>
-                <button id="btnRefresh" class="btn tiny" title="Refresh prices">↻</button>
-              </div>
+        <div class="results">
+          <div class="pricebar card">
+            <div class="price-status">
+              <span id="priceDot" class="dot"></span>
+              <span id="priceStatus">Loading prices…</span>
+              <button id="btnRefresh" class="btn tiny" title="Refresh prices" aria-label="Refresh prices">↻</button>
             </div>
-
-            <div class="table-wrap calc-wrap">
-              <table class="grid" id="calcTable">
-                <thead>
-                  <tr>
-                    <th class="rowhead">Metals</th>
-                    <th>Au<small>gold</small></th><th>Ag<small>silver</small></th><th>Pt<small>platinum</small></th><th>Pd<small>palladium</small></th><th>Rh<small>rhodium</small></th><th>Cu<small>copper</small></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr class="r-price">
-                    <th class="rowhead">Live price <small>€/kg · bid</small></th>
-                    <td data-m="au"></td><td data-m="ag"></td><td data-m="pt"></td><td data-m="pd"></td><td data-m="rh"></td><td data-m="cu"></td>
-                  </tr>
-                  <tr class="r-analysis">
-                    <th class="rowhead">Analysis</th>
-                    <td><div class="inunit"><input data-a="au" type="number" min="0" step="any" inputmode="decimal"><i>g/t</i></div></td>
-                    <td><div class="inunit"><input data-a="ag" type="number" min="0" step="any" inputmode="decimal"><i>g/t</i></div></td>
-                    <td><div class="inunit"><input data-a="pt" type="number" min="0" step="any" inputmode="decimal"><i>g/t</i></div></td>
-                    <td><div class="inunit"><input data-a="pd" type="number" min="0" step="any" inputmode="decimal"><i>g/t</i></div></td>
-                    <td><div class="inunit"><input data-a="rh" type="number" min="0" step="any" inputmode="decimal"><i>g/t</i></div></td>
-                    <td><div class="inunit"><input data-a="cu" type="number" min="0" step="any" inputmode="decimal"><i>%</i></div></td>
-                  </tr>
-                  <tr class="r-total">
-                    <th class="rowhead">Total metal <small>content</small></th>
-                    <td data-m="au"></td><td data-m="ag"></td><td data-m="pt"></td><td data-m="pd"></td><td data-m="rh"></td><td data-m="cu"></td>
-                  </tr>
-                  <tr class="r-payable">
-                    <th class="rowhead">Payable metal <small>after yield / deduction</small></th>
-                    <td data-m="au"></td><td data-m="ag"></td><td data-m="pt"></td><td data-m="pd"></td><td data-m="rh"></td><td data-m="cu"></td>
-                  </tr>
-                  <tr class="r-value">
-                    <th class="rowhead">Metal value</th>
-                    <td data-m="au"></td><td data-m="ag"></td><td data-m="pt"></td><td data-m="pd"></td><td data-m="rh"></td><td data-m="cu"></td>
-                  </tr>
-                  <tr class="r-refine">
-                    <th class="rowhead">Refining charge</th>
-                    <td data-m="au"></td><td data-m="ag"></td><td data-m="pt"></td><td data-m="pd"></td><td data-m="rh"></td><td data-m="cu"></td>
-                  </tr>
-                  <tr class="r-net">
-                    <th class="rowhead">Net metal</th>
-                    <td data-m="au"></td><td data-m="ag"></td><td data-m="pt"></td><td data-m="pd"></td><td data-m="rh"></td><td data-m="cu"></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="mcards" id="mCards"></div>
+            <div class="chips" id="priceChips"></div>
           </div>
 
-          <div class="card summary">
-            <div class="sumlines">
-              <div class="sl"><span>Payable metal value</span><b id="sValue">–</b></div>
-              <div class="sl neg"><span>Refining charges</span><b id="sRefine">–</b></div>
-              <div class="sl neg"><span id="sTreatLbl">Treatment</span><b id="sTreat">–</b></div>
-              <div class="sl neg"><span id="sSampLbl">Sampling</span><b id="sSamp">–</b></div>
-            </div>
-            <div class="total">
-              <span>Total amount</span>
-              <strong id="sTotal">–</strong>
-              <small id="sPerKg"></small>
-            </div>
-          </div>
+          <div class="weights" id="weights"></div>
+          <div id="ranking" class="ranking"></div>
+          <p class="foot">Return = net ÷ value of all contained metal at 100 % of the live price. €/kg is on gross (wet) weight.
+            USD results are converted with the EUR/USD rate shown above. Tap a refinery for the full breakdown.</p>
         </div>
       </div>
     </section>
 
-    <!-- ================= RULES ================= -->
-    <section id="tab-rules" class="tabpanel">
+    <!-- ================= TERMS ================= -->
+    <section id="tab-terms" class="tabpanel">
+      <div class="refchips" id="refChips"></div>
+      <div class="card" id="termsCard"></div>
+    </section>
+
+    <!-- ================= PRICES ================= -->
+    <section id="tab-prices" class="tabpanel">
       <div class="card">
         <div class="card-head">
-          <h2>REFFINING CATALOG — Calculation rules</h2>
-          <button id="btnResetRules" class="btn ghost">Reset to Excel values</button>
+          <h2>Metal prices</h2>
+          <div class="price-status"><span id="priceDot2" class="dot"></span><span id="priceStatus2"></span></div>
         </div>
+        <p class="note">Live <b>Bid</b> prices from Kitco (same data as kitco.com / Gold Live), refreshed every 60 s.
+          All 7 refineries are calculated with these prices. Enter a manual price to override one metal (leave empty for live).</p>
+        <div id="priceList" class="pricelist"></div>
 
-        <h3>Settings</h3>
-        <div class="table-wrap">
-          <table class="grid rules">
-            <thead><tr><th>Setting</th><th>Value</th></tr></thead>
-            <tbody>
-              <tr><td>Default Total Size MT (quantity for a new analysis)</td><td><input data-s="defaultMT" type="number" step="any"></td></tr>
-              <tr><td>Sampling threshold (MT)</td><td><input data-s="samplingThresholdMT" type="number" step="any"></td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <h3>Metals</h3>
-        <div class="table-wrap">
-          <table class="grid rules" id="metalRules">
-            <thead>
-              <tr><th>Metal</th><th>Metal payment %</th><th>Yield %</th><th>Min. deduction</th><th>Deduction unit</th><th>Refining charge</th><th>Charge unit</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-
-        <h3>General costs</h3>
-        <div class="table-wrap">
-          <table class="grid rules">
-            <thead><tr><th>Cost</th><th>Value</th><th>Unit</th></tr></thead>
-            <tbody>
-              <tr><td>Treatment</td><td><input data-s="treatment" type="number" step="any"></td><td>€/dmt</td></tr>
-              <tr><td>Sampling lot &lt; threshold</td><td><input data-s="samplingSmall" type="number" step="any"></td><td>€/lot</td></tr>
-              <tr><td>Sampling lot ≥ threshold</td><td><input data-s="samplingLarge" type="number" step="any"></td><td>€/lot</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <h3>Operating rules</h3>
-        <ul class="howto">
-          <li><b>Total metal</b> = analysis × dry tonnes (dmt). Au/Ag/Pt/Pd/Rh in g/t, Cu in %.</li>
-          <li><b>Deduction</b> = the greater of <i>analysis × (1 − Yield)</i> and <i>Min. deduction</i>.
-            Payable grade = (analysis − deduction) × Metal payment %, never below 0.</li>
-          <li><b>Metal value</b> = payable metal × live Kitco price (Bid, converted to €/kg).</li>
-          <li><b>Refining charge</b> applies to the payable metal (€/kg or €/t of metal).</li>
-          <li><b>Treatment</b> = rate × dry tonnes. <b>Sampling</b> = flat fee per lot, depending on the threshold.</li>
-          <li><b>Total amount</b> = Σ metal value − Σ refining charges − treatment − sampling.</li>
-          <li>Pt and Rh had no rules in the Excel file — they were set the same as Pd; change them here if needed.</li>
-        </ul>
-
-        <h3>Prices</h3>
-        <p class="note">Source: Kitco (same data as kitco.com / Gold Live), <b>Bid</b> column, in EUR.
-          Precious metals are converted from €/troy oz (×32.1507) to €/kg, copper from €/lb (×2.2046) to €/kg.
-          Prices refresh automatically every 60 seconds. To calculate with a fixed price, enter it below (empty = live price).</p>
-        <div class="table-wrap">
-          <table class="grid rules" id="overrideTable">
-            <thead><tr><th>Metal</th><th>Live price €/kg</th><th>Manual price €/kg</th></tr></thead>
-            <tbody></tbody>
-          </table>
+        <h3>EUR / USD rate</h3>
+        <p class="note">Used to convert USD contracts to EUR (and EUR charges at PedalPoint to USD). Live rate = Kitco gold bid in USD ÷ gold bid in EUR.</p>
+        <div class="fxbox">
+          <label class="field"><span>Rate source</span>
+            <select id="fxMode"><option value="live">Live (Kitco)</option><option value="manual">Manual (locked)</option></select>
+          </label>
+          <label class="field"><span>Manual rate <i>USD per 1 EUR</i></span><input id="fxManual" type="number" step="any" inputmode="decimal"></label>
+          <div class="fxnow"><span>In use</span><b id="fxNow">–</b></div>
         </div>
 
         <h3>Backup</h3>
         <div class="row-btns left">
-          <button id="btnExport" class="btn ghost">Export analyses (.json)</button>
+          <button id="btnExport" class="btn ghost">Export lots &amp; terms (.json)</button>
           <label class="btn ghost">Import (.json)<input id="inImport" type="file" accept="application/json" hidden></label>
         </div>
-        <p class="note">Analyses and rules are saved in the browser you are using. Export them from time to time so you can move them to another computer.</p>
+        <p class="note">Lots, edited terms and price settings are saved in this browser. Export them to move to another device.</p>
       </div>
     </section>
   </main>
 
-  <button class="mtotalbar" id="mTotalBar" type="button">
-    <span>Total amount</span><strong id="mTotalVal">–</strong>
+  <button class="bestbar" id="bestBar" type="button">
+    <span id="bestLbl">Best</span><strong id="bestVal">–</strong>
   </button>
 
+  <script src="engine.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
