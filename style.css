@@ -171,3 +171,88 @@ table.grid { border-collapse: collapse; width: 100%; min-width: 640px; }
 .grid thead .rowhead { background: var(--surface-2); }
 .r-analysis .rowhead { background: var(--surface); }
 .grid thead th small { display: block; font-size: 10.5px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+/* ================= PHONE LAYOUT ================= */
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mcards, .mtotalbar { display: none; }
+.mt-name span { display: none; }
+
+@media (max-width: 700px) {
+  body { font-size: 15px; padding-bottom: 76px; }
+  .topbar { padding: 12px 16px; gap: 10px; }
+  .brand .sub { display: none; }
+  .tabs { width: 100%; }
+  .tab { flex: 1; padding: 9px 8px; }
+  main { padding: 12px; }
+  .layout, .maincol { gap: 12px; }
+  .card { padding: 14px; border-radius: 12px; }
+  .side { gap: 10px; }
+  .field input, .field select, .field textarea { font-size: 16px; padding: 10px; } /* 16px stops iOS zoom */
+  .saved-hint { display: none; }
+
+  /* calculator: cards instead of the wide table */
+  .calc-wrap { display: none; }
+  .mcards { display: grid; gap: 10px; }
+  .mcard {
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+    background: var(--surface-2);
+  }
+  .mtop { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .mname b { font-size: 18px; margin-right: 6px; }
+  .mname span { color: var(--muted); font-size: 13px; }
+  .minput { display: flex; align-items: center; gap: 6px; }
+  .minput input {
+    width: 120px; font: 600 17px var(--mono); text-align: right; color: var(--ink);
+    background: var(--input-bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px;
+  }
+  .minput input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .minput i { font-style: normal; font-size: 12px; color: var(--muted); width: 22px; }
+  .mprice { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+  .mprice b { color: var(--accent); font-family: var(--mono); font-weight: 600; }
+  .mcard dl {
+    display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 10px 0 0;
+    font-size: 13.5px; padding-top: 10px; border-top: 1px dashed var(--line);
+  }
+  .mcard dt { color: var(--muted); }
+  .mcard dd { margin: 0; text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .mcard dd.neg { color: var(--bad); }
+  .mnet { display: flex; justify-content: space-between; margin-top: 8px; font-size: 15px; }
+  .mnet b { font-family: var(--mono); }
+  /* metals with no analysis: collapse the details */
+  .mcard.empty dl, .mcard.empty .mnet { display: none; }
+
+  /* summary */
+  .summary { gap: 14px; }
+  .sl { font-size: 13.5px; }
+  .total { min-width: 0; padding: 14px 16px; }
+  .total strong { font-size: 24px; }
+
+  /* sticky total at the bottom */
+  .mtotalbar {
+    display: flex; justify-content: space-between; align-items: center;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--surface); border: 0; border-top: 1px solid var(--line);
+    box-shadow: 0 -4px 16px rgba(0,0,0,.08); color: var(--ink); font-family: var(--sans); cursor: pointer;
+  }
+  .mtotalbar span { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .mtotalbar strong { font: 600 20px var(--mono); }
+  .mtotalbar strong.negative { color: var(--bad); }
+
+  /* rules tab: tables become stacked rows */
+  .rules { min-width: 0 !important; }
+  .rules thead { display: none; }
+  .rules, .rules tbody { display: block; width: 100%; }
+  .rules tr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; border-bottom: 1px solid var(--line); padding: 10px 0; }
+  .rules td { border: 0; padding: 2px 0; flex: 0 0 auto; text-align: right; }
+  .rules td:first-child { flex: 1 1 0; text-align: left; }
+  .rules td[data-label], #metalRules td.mt-name { flex: 1 1 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .rules td:first-child { font-weight: 600; }
+  .rules td[data-label]::before { content: attr(data-label); color: var(--muted); font-size: 13px; text-align: left; }
+  .rules input { width: 110px; font-size: 16px; }
+  #metalRules td.mt-name { justify-content: flex-start; gap: 6px; }
+  .mt-name span { display: inline; color: var(--muted); font-weight: 400; }
+  body.on-rules .mtotalbar { display: none; }
+  body.on-rules { padding-bottom: 0; }
+  .rules select { font-size: 15px; }
+}

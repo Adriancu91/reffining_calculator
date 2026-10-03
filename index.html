@@ -42,6 +42,7 @@
             <span>Lot</span>
             <input id="inLot" type="text" placeholder="e.g. lot#2243">
           </label>
+          <div class="pair">
           <label class="field">
             <span>Quantity (kg)</span>
             <input id="inQty" type="number" min="0" step="any" inputmode="decimal">
@@ -50,6 +51,7 @@
             <span>Moisture (%)</span>
             <input id="inMoist" type="number" min="0" max="100" step="any" inputmode="decimal">
           </label>
+          </div>
           <label class="field">
             <span>Date</span>
             <input id="inDate" type="date">
@@ -77,7 +79,7 @@
               </div>
             </div>
 
-            <div class="table-wrap">
+            <div class="table-wrap calc-wrap">
               <table class="grid" id="calcTable">
                 <thead>
                   <tr>
@@ -122,6 +124,7 @@
                 </tbody>
               </table>
             </div>
+            <div class="mcards" id="mCards"></div>
           </div>
 
           <div class="card summary">
@@ -214,6 +217,10 @@
       </div>
     </section>
   </main>
+
+  <button class="mtotalbar" id="mTotalBar" type="button">
+    <span>Total amount</span><strong id="mTotalVal">–</strong>
+  </button>
 
   <script src="app.js"></script>
 </body>

@@ -142,6 +142,31 @@
   const inLot = $("#inLot"), inQty = $("#inQty"), inMoist = $("#inMoist"), inDate = $("#inDate"), inNotes = $("#inNotes");
   const selAnalysis = $("#selAnalysis");
 
+  // Phone layout: one card per metal instead of the wide table
+  const FULL = { au: "gold", ag: "silver", pt: "platinum", pd: "palladium", rh: "rhodium", cu: "copper" };
+  (function buildMobileCards() {
+    const wrap = $("#mCards");
+    METALS.forEach((m) => {
+      const card = document.createElement("div");
+      card.className = "mcard";
+      card.dataset.m = m;
+      card.innerHTML = `
+        <div class="mtop">
+          <div class="mname"><b>${NAMES[m]}</b><span>${FULL[m]}</span></div>
+          <div class="minput"><input data-a="${m}" type="number" min="0" step="any" inputmode="decimal" placeholder="0"><i>${m === "cu" ? "%" : "g/t"}</i></div>
+        </div>
+        <div class="mprice">Live <b data-k="price"></b> €/kg</div>
+        <dl>
+          <dt>Total metal</dt><dd data-k="total"></dd>
+          <dt>Payable</dt><dd data-k="payable"></dd>
+          <dt>Metal value</dt><dd data-k="value"></dd>
+          <dt>Refining</dt><dd data-k="refine" class="neg"></dd>
+        </dl>
+        <div class="mnet"><span>Net</span><b data-k="net"></b></div>`;
+      wrap.appendChild(card);
+    });
+  })();
+
   function fillSelect() {
     selAnalysis.innerHTML = "";
     analyses.forEach((a) => {
@@ -199,6 +224,23 @@
       ? "Missing price for an analysed metal"
       : c.wetT > 0 ? `${fmtNum(c.total / (c.wetT * 1000), 3)} €/kg material` : "";
 
+    // phone cards
+    METALS.forEach((m) => {
+      const card = $(`.mcard[data-m="${m}"]`);
+      const p = c.per[m], pr = priceFor(m);
+      const set = (k, v) => { $(`[data-k="${k}"]`, card).textContent = v; };
+      set("price", isFinite(pr.v) ? fmtNum(pr.v, 2) + (pr.manual ? " ✎" : "") : "–");
+      set("total", fmtMass(p.contentKg));
+      set("payable", `${fmtMass(p.payableKg)} · ${fmtNum(p.payGrade, m === "cu" ? 2 : 1)} ${m === "cu" ? "%" : "g/t"}`);
+      set("value", fmtEur(p.value));
+      set("refine", p.refine ? "−" + fmtEur(p.refine) : fmtEur(0));
+      set("net", fmtEur(p.net));
+      card.classList.toggle("empty", !(p.grade > 0));
+    });
+    const bar = $("#mTotalVal");
+    bar.textContent = fmtEur(c.total);
+    bar.classList.toggle("negative", c.total < 0);
+
     renderOverrideTable();
   }
 
@@ -211,7 +253,12 @@
   inMoist.addEventListener("input", () => updateField((a) => (a.moisture = inMoist.value)));
   inDate.addEventListener("input", () => updateField((a) => (a.date = inDate.value)));
   inNotes.addEventListener("input", () => updateField((a) => (a.notes = inNotes.value)));
-  $$("[data-a]").forEach((inp) => inp.addEventListener("input", () => updateField((a) => (a.grades[inp.dataset.a] = inp.value))));
+  $$("[data-a]").forEach((inp) => inp.addEventListener("input", () => {
+    // keep the desktop table and phone cards in sync
+    $$(`[data-a="${inp.dataset.a}"]`).forEach((o) => { if (o !== inp) o.value = inp.value; });
+    updateField((a) => (a.grades[inp.dataset.a] = inp.value));
+  }));
+  $("#mTotalBar").addEventListener("click", () => $(".summary").scrollIntoView({ behavior: "smooth", block: "center" }));
 
   selAnalysis.addEventListener("change", () => { currentId = selAnalysis.value; persist(); loadIntoForm(); render(); });
   $("#btnNew").addEventListener("click", () => { newAnalysis(); fillSelect(); loadIntoForm(); render(); inLot.focus(); inLot.select(); });
@@ -231,6 +278,7 @@
   $$(".tab").forEach((t) => t.addEventListener("click", () => {
     $$(".tab").forEach((x) => x.classList.toggle("active", x === t));
     $$(".tabpanel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + t.dataset.tab));
+    document.body.classList.toggle("on-rules", t.dataset.tab === "rules");
   }));
 
   // ---------- rules UI ----------
@@ -241,13 +289,13 @@
       const r = rules.metals[m];
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td><b>${NAMES[m]}</b></td>
-        <td><input data-r="${m}.pay" type="number" step="any" value="${r.pay}"></td>
-        <td><input data-r="${m}.yield" type="number" step="any" value="${r.yield}"></td>
-        <td><input data-r="${m}.minDed" type="number" step="any" value="${r.minDed}"></td>
-        <td>${m === "cu" ? "%-points" : "g/t"}</td>
-        <td><input data-r="${m}.chargeVal" type="number" step="any" value="${r.chargeVal}"></td>
-        <td><select data-r="${m}.chargeUnit">
+        <td class="mt-name"><b>${NAMES[m]}</b> <span>${FULL[m]}</span></td>
+        <td data-label="Payment %"><input data-r="${m}.pay" type="number" step="any" value="${r.pay}"></td>
+        <td data-label="Yield %"><input data-r="${m}.yield" type="number" step="any" value="${r.yield}"></td>
+        <td data-label="Min. deduction"><input data-r="${m}.minDed" type="number" step="any" value="${r.minDed}"></td>
+        <td data-label="Deduction unit">${m === "cu" ? "%-points" : "g/t"}</td>
+        <td data-label="Refining charge"><input data-r="${m}.chargeVal" type="number" step="any" value="${r.chargeVal}"></td>
+        <td data-label="Charge unit"><select data-r="${m}.chargeUnit">
               <option value="eur_kg"${r.chargeUnit === "eur_kg" ? " selected" : ""}>€/kg metal</option>
               <option value="eur_t"${r.chargeUnit === "eur_t" ? " selected" : ""}>€/t metal</option>
             </select></td>`;
