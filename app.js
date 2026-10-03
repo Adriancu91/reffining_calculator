@@ -1,16 +1,16 @@
-/* Refining Calculator — logică de calcul și prețuri live Kitco */
+/* Refining Calculator — calculation logic and live Kitco prices */
 (function () {
   "use strict";
 
   const METALS = ["au", "ag", "pt", "pd", "rh", "cu"];
   const NAMES = { au: "Au", ag: "Ag", pt: "Pt", pd: "Pd", rh: "Rh", cu: "Cu" };
   const KITCO_SYMBOL = { au: "AU", ag: "AG", pt: "PT", pd: "PD", rh: "RH", cu: "CU" };
-  const OZ_PER_KG = 1000 / 31.1034768;   // uncii troy într-un kg
-  const LB_PER_KG = 1 / 0.45359237;      // livre într-un kg
+  const OZ_PER_KG = 1000 / 31.1034768;   // troy ounces per kg
+  const LB_PER_KG = 1 / 0.45359237;      // pounds per kg
   const KITCO_URL = "https://kdb-gw.prod.kitco.com/";
   const REFRESH_MS = 60 * 1000;
 
-  // Valorile din fișierul Excel (REFFINING CATALOG — Reguli de calcul)
+  // Values from the Excel file (REFFINING CATALOG — calculation rules)
   const DEFAULT_RULES = {
     defaultMT: 10,
     samplingThresholdMT: 10,
@@ -20,9 +20,9 @@
     metals: {
       au: { pay: 100, yield: 98, minDed: 8,   chargeVal: 180, chargeUnit: "eur_kg" },
       ag: { pay: 100, yield: 98, minDed: 125, chargeVal: 18,  chargeUnit: "eur_kg" },
-      pt: { pay: 100, yield: 85, minDed: 9,   chargeVal: 500, chargeUnit: "eur_kg" }, // nu era în Excel → ca Pd
+      pt: { pay: 100, yield: 85, minDed: 9,   chargeVal: 500, chargeUnit: "eur_kg" }, // not in Excel → same as Pd
       pd: { pay: 100, yield: 85, minDed: 9,   chargeVal: 500, chargeUnit: "eur_kg" },
-      rh: { pay: 100, yield: 85, minDed: 9,   chargeVal: 500, chargeUnit: "eur_kg" }, // nu era în Excel → ca Pd
+      rh: { pay: 100, yield: 85, minDed: 9,   chargeVal: 500, chargeUnit: "eur_kg" }, // not in Excel → same as Pd
       cu: { pay: 100, yield: 100, minDed: 2.5, chargeVal: 475, chargeUnit: "eur_t" },
     },
   };
@@ -56,7 +56,7 @@
   }
 
   // ---------- formatting ----------
-  const nf = (d) => new Intl.NumberFormat("ro-RO", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const nf = (d) => new Intl.NumberFormat("en-GB", { minimumFractionDigits: d, maximumFractionDigits: d });
   const fmtEur = (v) => (isFinite(v) ? nf(2).format(v) + " €" : "–");
   const fmtNum = (v, d = 2) => (isFinite(v) ? nf(d).format(v) : "–");
   const num = (v) => { const n = parseFloat(String(v).replace(",", ".")); return isFinite(n) ? n : 0; };
@@ -108,11 +108,11 @@
 
     METALS.forEach((m) => {
       const r = rules.metals[m];
-      const grade = num(a.grades[m]);                       // g/t sau %
+      const grade = num(a.grades[m]);                       // g/t or %
       const deduction = Math.max(grade * (1 - num(r.yield) / 100), num(r.minDed));
       const payGrade = Math.max(0, grade - deduction) * (num(r.pay) / 100);
 
-      // conținut în kg de metal
+      // metal content in kg
       const toKg = m === "cu" ? (g) => (g / 100) * dryT * 1000 : (g) => (g * dryT) / 1000;
       const contentKg = toKg(grade);
       const payableKg = toKg(payGrade);
@@ -147,7 +147,7 @@
     analyses.forEach((a) => {
       const o = document.createElement("option");
       o.value = a.id;
-      o.textContent = `${a.lot || "(fără nume)"} · ${fmtNum(num(a.qtyKg), 0)} kg${a.date ? " · " + a.date : ""}`;
+      o.textContent = `${a.lot || "(no name)"} · ${fmtNum(num(a.qtyKg), 0)} kg${a.date ? " · " + a.date : ""}`;
       if (a.id === currentId) o.selected = true;
       selAnalysis.appendChild(o);
     });
@@ -196,7 +196,7 @@
     tot.textContent = fmtEur(c.total);
     tot.classList.toggle("negative", c.total < 0);
     $("#sPerKg").textContent = c.missingPrice
-      ? "Lipsește prețul pentru un metal analizat"
+      ? "Missing price for an analysed metal"
       : c.wetT > 0 ? `${fmtNum(c.total / (c.wetT * 1000), 3)} €/kg material` : "";
 
     renderOverrideTable();
@@ -216,12 +216,12 @@
   selAnalysis.addEventListener("change", () => { currentId = selAnalysis.value; persist(); loadIntoForm(); render(); });
   $("#btnNew").addEventListener("click", () => { newAnalysis(); fillSelect(); loadIntoForm(); render(); inLot.focus(); inLot.select(); });
   $("#btnDup").addEventListener("click", () => {
-    const a = clone(current()); a.id = uid(); a.lot = (a.lot || "") + " (copie)"; a.date = today();
+    const a = clone(current()); a.id = uid(); a.lot = (a.lot || "") + " (copy)"; a.date = today();
     analyses.unshift(a); currentId = a.id; persist(); fillSelect(); loadIntoForm(); render();
   });
   $("#btnDel").addEventListener("click", () => {
     const a = current();
-    if (!confirm(`Ștergi analiza „${a.lot}”?`)) return;
+    if (!confirm(`Delete analysis "${a.lot}"?`)) return;
     analyses = analyses.filter((x) => x.id !== a.id);
     if (!analyses.length) newAnalysis(); else currentId = analyses[0].id;
     persist(); fillSelect(); loadIntoForm(); render();
@@ -245,7 +245,7 @@
         <td><input data-r="${m}.pay" type="number" step="any" value="${r.pay}"></td>
         <td><input data-r="${m}.yield" type="number" step="any" value="${r.yield}"></td>
         <td><input data-r="${m}.minDed" type="number" step="any" value="${r.minDed}"></td>
-        <td>${m === "cu" ? "%-puncte" : "g/t"}</td>
+        <td>${m === "cu" ? "%-points" : "g/t"}</td>
         <td><input data-r="${m}.chargeVal" type="number" step="any" value="${r.chargeVal}"></td>
         <td><select data-r="${m}.chargeUnit">
               <option value="eur_kg"${r.chargeUnit === "eur_kg" ? " selected" : ""}>€/kg metal</option>
@@ -264,7 +264,7 @@
     });
   }
   $("#btnResetRules").addEventListener("click", () => {
-    if (!confirm("Resetezi toate regulile la valorile din Excel?")) return;
+    if (!confirm("Reset all rules to the Excel values?")) return;
     rules = clone(DEFAULT_RULES); save(LS_RULES, rules); buildRulesUI(); render();
   });
 
@@ -290,7 +290,7 @@
     const blob = new Blob([JSON.stringify({ analyses, rules, exported: new Date().toISOString() }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `refining-analize-${today()}.json`;
+    a.download = `refining-analyses-${today()}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
@@ -301,12 +301,12 @@
       const incoming = Array.isArray(data) ? data : data.analyses || [];
       const ids = new Set(analyses.map((a) => a.id));
       incoming.forEach((a) => { if (!ids.has(a.id)) analyses.push(a); });
-      if (data.rules && confirm("Fișierul conține și reguli de calcul. Le încarci și pe ele?")) {
+      if (data.rules && confirm("The file also contains calculation rules. Load them too?")) {
         rules = mergeRules(data.rules); save(LS_RULES, rules); buildRulesUI();
       }
       persist(); fillSelect(); render();
-      alert(`Importat: ${incoming.length} analize.`);
-    } catch (err) { alert("Fișier invalid: " + err.message); }
+      alert(`Imported: ${incoming.length} analyses.`);
+    } catch (err) { alert("Invalid file: " + err.message); }
     e.target.value = "";
   });
 
@@ -320,7 +320,7 @@
         : `${m}: GetMetalQuoteV3(symbol: "${KITCO_SYMBOL[m]}", currency: $c) { results { bid unit originalTime } }`
     ).join("\n");
     const query = `query ($c: String!) {\n${parts}\n}`;
-    priceStatus.textContent = "Se actualizează…";
+    priceStatus.textContent = "Updating…";
     try {
       const res = await fetch(KITCO_URL, {
         method: "POST",
@@ -349,14 +349,14 @@
     } catch (err) {
       priceDot.className = "dot err";
       priceStatus.textContent = livePricesTime
-        ? "Eroare la actualizare — ultimele prețuri: " + stamp(livePricesTime)
-        : "Nu s-au putut încărca prețurile (" + err.message + ")";
+        ? "Update failed — last prices: " + stamp(livePricesTime)
+        : "Could not load prices (" + err.message + ")";
     }
     render();
   }
   function stamp(iso) {
     const t = new Date(iso);
-    return isNaN(t) ? "" : t.toLocaleString("ro-RO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    return isNaN(t) ? "" : t.toLocaleString("en-GB", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   }
   $("#btnRefresh").addEventListener("click", fetchPrices);
 
@@ -370,6 +370,6 @@
   fetchPrices();
   setInterval(fetchPrices, REFRESH_MS);
 
-  // expus pentru teste
+  // exposed for testing
   window.__rc = { calculate, rules: () => rules, livePrices: () => livePrices };
 })();

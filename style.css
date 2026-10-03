@@ -5,7 +5,7 @@
   --ink: #1d1f22;
   --muted: #6b6f76;
   --line: #e2dfd7;
-  --accent: #b8860b;      /* aur */
+  --accent: #b8860b;      /* gold */
   --accent-ink: #ffffff;
   --accent-soft: #f6ecd2;
   --good: #2f7d4f;
@@ -166,7 +166,7 @@ table.grid { border-collapse: collapse; width: 100%; min-width: 640px; }
 .howto { padding-left: 18px; margin: 0; display: grid; gap: 6px; font-size: 14px; }
 .note { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
 
-/* pe ecrane mici, eticheta rândului rămâne vizibilă la scroll orizontal */
+/* on small screens the row label stays visible while scrolling horizontally */
 .grid .rowhead { position: sticky; left: 0; background: var(--surface); z-index: 1; }
 .grid thead .rowhead { background: var(--surface-2); }
 .r-analysis .rowhead { background: var(--surface); }

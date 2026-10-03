@@ -1,27 +1,27 @@
 # Refining Calculator
 
-Calculator pentru analizele la plăci electronice (Au, Ag, Pt, Pd, Rh, Cu), cu prețuri live de la Kitco (coloana **Bid**, în **€/kg**).
+Calculator for e-scrap / PCB assays (Au, Ag, Pt, Pd, Rh, Cu) with live Kitco prices (**Bid** column, in **€/kg**).
 
 **Site:** https://adriancu91.github.io/reffining_calculator/
 
-## Ce face
-- Introduci lotul, cantitatea (kg) și analiza (g/t pentru metale prețioase, % pentru Cu).
-- Calculează metalul total, metalul plătibil (yield / deducție minimă), valoarea, refining charge, treatment, sampling și **Total amount**.
-- Analizele se salvează automat în browser; le poți selecta, duplica, șterge, exporta/importa (.json).
-- Regulile de calcul (din fișierul Excel) se pot modifica din tab-ul **Reguli de calcul**.
+## What it does
+- Enter the lot, quantity (kg) and analysis (g/t for precious metals, % for Cu).
+- Calculates total metal, payable metal (yield / minimum deduction), value, refining charge, treatment, sampling and the **Total amount**.
+- Analyses are saved automatically in the browser; you can select, duplicate, delete, export/import them (.json).
+- The calculation rules (from the Excel file) can be edited in the **Calculation rules** tab.
 
-## Formule
-- Deducție = max(analiză × (1 − Yield), Min. deduction)
-- Analiză plătibilă = max(0, analiză − deducție) × Metal payment %
-- Valoare = metal plătibil (kg) × preț Kitco bid (€/kg)
-- Refining charge = metal plătibil × tarif (€/kg sau €/t)
-- Treatment = 550 €/dmt × tone uscate; Sampling = 950 €/lot (< 10 MT) sau 650 €/lot (≥ 10 MT)
-- Total = Σ valoare − Σ refining − treatment − sampling
+## Formulas
+- Deduction = max(analysis × (1 − Yield), Min. deduction)
+- Payable grade = max(0, analysis − deduction) × Metal payment %
+- Value = payable metal (kg) × Kitco bid price (€/kg)
+- Refining charge = payable metal × rate (€/kg or €/t)
+- Treatment = 550 €/dmt × dry tonnes; Sampling = 950 €/lot (< 10 MT) or 650 €/lot (≥ 10 MT)
+- Total = Σ value − Σ refining − treatment − sampling
 
-## Prețuri
-Din API-ul public folosit de kitco.com (`kdb-gw.prod.kitco.com`), monedă EUR. Aur/argint/platină/paladiu/rodiu vin în €/oz troy și se convertesc în €/kg; cuprul vine în €/lb. Actualizare automată la 60 s.
+## Prices
+From the public API used by kitco.com (`kdb-gw.prod.kitco.com`), currency EUR. Gold/silver/platinum/palladium/rhodium come in €/troy oz and are converted to €/kg; copper comes in €/lb. Auto-refresh every 60 s.
 
-## Fișiere
-- `index.html` — interfața
-- `style.css` — aspectul
-- `app.js` — calculele, prețurile și salvarea
+## Files
+- `index.html` — the interface
+- `style.css` — the styling
+- `app.js` — calculations, prices and saving

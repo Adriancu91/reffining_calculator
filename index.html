@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ro">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -15,12 +15,12 @@
       <span class="logo">⬡</span>
       <div>
         <h1>Refining Calculator</h1>
-        <p class="sub">Calcul analize plăci electronice · prețuri live Kitco (Bid, €/kg)</p>
+        <p class="sub">E-scrap / PCB assay calculator · live Kitco prices (Bid, €/kg)</p>
       </div>
     </div>
     <nav class="tabs" role="tablist">
       <button class="tab active" data-tab="calc" role="tab">Calculator</button>
-      <button class="tab" data-tab="rules" role="tab">Reguli de calcul</button>
+      <button class="tab" data-tab="rules" role="tab">Calculation rules</button>
     </nav>
   </header>
 
@@ -29,10 +29,10 @@
     <section id="tab-calc" class="tabpanel active">
       <div class="layout">
         <aside class="side card">
-          <button id="btnNew" class="btn primary block">+ Analiză nouă</button>
+          <button id="btnNew" class="btn primary block">+ New analysis</button>
 
           <label class="field">
-            <span>Selectează analiza</span>
+            <span>Select analysis</span>
             <select id="selAnalysis"></select>
           </label>
 
@@ -40,30 +40,30 @@
 
           <label class="field">
             <span>Lot</span>
-            <input id="inLot" type="text" placeholder="ex: lot#2243">
+            <input id="inLot" type="text" placeholder="e.g. lot#2243">
           </label>
           <label class="field">
-            <span>Cantitate (kg)</span>
+            <span>Quantity (kg)</span>
             <input id="inQty" type="number" min="0" step="any" inputmode="decimal">
           </label>
           <label class="field">
-            <span>Umiditate (%)</span>
+            <span>Moisture (%)</span>
             <input id="inMoist" type="number" min="0" max="100" step="any" inputmode="decimal">
           </label>
           <label class="field">
-            <span>Data</span>
+            <span>Date</span>
             <input id="inDate" type="date">
           </label>
           <label class="field">
-            <span>Observații</span>
-            <textarea id="inNotes" rows="2" placeholder="furnizor, tip material…"></textarea>
+            <span>Notes</span>
+            <textarea id="inNotes" rows="2" placeholder="supplier, material type…"></textarea>
           </label>
 
           <div class="row-btns">
-            <button id="btnDup" class="btn ghost">Duplică</button>
-            <button id="btnDel" class="btn ghost danger">Șterge</button>
+            <button id="btnDup" class="btn ghost">Duplicate</button>
+            <button id="btnDel" class="btn ghost danger">Delete</button>
           </div>
-          <p class="saved-hint" id="savedHint">Salvat automat în acest browser</p>
+          <p class="saved-hint" id="savedHint">Saved automatically in this browser</p>
         </aside>
 
         <div class="maincol">
@@ -72,8 +72,8 @@
               <h2>Real-time analysis calculator</h2>
               <div class="price-status">
                 <span id="priceDot" class="dot"></span>
-                <span id="priceStatus">Se încarcă prețurile…</span>
-                <button id="btnRefresh" class="btn tiny" title="Reîncarcă prețurile">↻</button>
+                <span id="priceStatus">Loading prices…</span>
+                <button id="btnRefresh" class="btn tiny" title="Refresh prices">↻</button>
               </div>
             </div>
 
@@ -81,17 +81,17 @@
               <table class="grid" id="calcTable">
                 <thead>
                   <tr>
-                    <th class="rowhead">Metale</th>
-                    <th>Au<small>aur</small></th><th>Ag<small>argint</small></th><th>Pt<small>platină</small></th><th>Pd<small>paladiu</small></th><th>Rh<small>rodiu</small></th><th>Cu<small>cupru</small></th>
+                    <th class="rowhead">Metals</th>
+                    <th>Au<small>gold</small></th><th>Ag<small>silver</small></th><th>Pt<small>platinum</small></th><th>Pd<small>palladium</small></th><th>Rh<small>rhodium</small></th><th>Cu<small>copper</small></th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr class="r-price">
-                    <th class="rowhead">Preț live <small>€/kg · bid</small></th>
+                    <th class="rowhead">Live price <small>€/kg · bid</small></th>
                     <td data-m="au"></td><td data-m="ag"></td><td data-m="pt"></td><td data-m="pd"></td><td data-m="rh"></td><td data-m="cu"></td>
                   </tr>
                   <tr class="r-analysis">
-                    <th class="rowhead">Analiză</th>
+                    <th class="rowhead">Analysis</th>
                     <td><div class="inunit"><input data-a="au" type="number" min="0" step="any" inputmode="decimal"><i>g/t</i></div></td>
                     <td><div class="inunit"><input data-a="ag" type="number" min="0" step="any" inputmode="decimal"><i>g/t</i></div></td>
                     <td><div class="inunit"><input data-a="pt" type="number" min="0" step="any" inputmode="decimal"><i>g/t</i></div></td>
@@ -100,15 +100,15 @@
                     <td><div class="inunit"><input data-a="cu" type="number" min="0" step="any" inputmode="decimal"><i>%</i></div></td>
                   </tr>
                   <tr class="r-total">
-                    <th class="rowhead">Metal total <small>conținut</small></th>
+                    <th class="rowhead">Total metal <small>content</small></th>
                     <td data-m="au"></td><td data-m="ag"></td><td data-m="pt"></td><td data-m="pd"></td><td data-m="rh"></td><td data-m="cu"></td>
                   </tr>
                   <tr class="r-payable">
-                    <th class="rowhead">Metal plătibil <small>după yield / deducție</small></th>
+                    <th class="rowhead">Payable metal <small>after yield / deduction</small></th>
                     <td data-m="au"></td><td data-m="ag"></td><td data-m="pt"></td><td data-m="pd"></td><td data-m="rh"></td><td data-m="cu"></td>
                   </tr>
                   <tr class="r-value">
-                    <th class="rowhead">Valoare metal</th>
+                    <th class="rowhead">Metal value</th>
                     <td data-m="au"></td><td data-m="ag"></td><td data-m="pt"></td><td data-m="pd"></td><td data-m="rh"></td><td data-m="cu"></td>
                   </tr>
                   <tr class="r-refine">
@@ -126,7 +126,7 @@
 
           <div class="card summary">
             <div class="sumlines">
-              <div class="sl"><span>Valoare metale plătibile</span><b id="sValue">–</b></div>
+              <div class="sl"><span>Payable metal value</span><b id="sValue">–</b></div>
               <div class="sl neg"><span>Refining charges</span><b id="sRefine">–</b></div>
               <div class="sl neg"><span id="sTreatLbl">Treatment</span><b id="sTreat">–</b></div>
               <div class="sl neg"><span id="sSampLbl">Sampling</span><b id="sSamp">–</b></div>
@@ -141,76 +141,76 @@
       </div>
     </section>
 
-    <!-- ================= REGULI ================= -->
+    <!-- ================= RULES ================= -->
     <section id="tab-rules" class="tabpanel">
       <div class="card">
         <div class="card-head">
-          <h2>REFFINING CATALOG — Reguli de calcul</h2>
-          <button id="btnResetRules" class="btn ghost">Resetează la valorile din Excel</button>
+          <h2>REFFINING CATALOG — Calculation rules</h2>
+          <button id="btnResetRules" class="btn ghost">Reset to Excel values</button>
         </div>
 
-        <h3>Setări</h3>
+        <h3>Settings</h3>
         <div class="table-wrap">
           <table class="grid rules">
-            <thead><tr><th>Setare</th><th>Valoare</th></tr></thead>
+            <thead><tr><th>Setting</th><th>Value</th></tr></thead>
             <tbody>
-              <tr><td>Total Size MT implicit (cantitate pentru o analiză nouă)</td><td><input data-s="defaultMT" type="number" step="any"></td></tr>
-              <tr><td>Prag sampling (MT)</td><td><input data-s="samplingThresholdMT" type="number" step="any"></td></tr>
+              <tr><td>Default Total Size MT (quantity for a new analysis)</td><td><input data-s="defaultMT" type="number" step="any"></td></tr>
+              <tr><td>Sampling threshold (MT)</td><td><input data-s="samplingThresholdMT" type="number" step="any"></td></tr>
             </tbody>
           </table>
         </div>
 
-        <h3>Metale</h3>
+        <h3>Metals</h3>
         <div class="table-wrap">
           <table class="grid rules" id="metalRules">
             <thead>
-              <tr><th>Metal</th><th>Metal payment %</th><th>Yield %</th><th>Min. deduction</th><th>Unitate deducție</th><th>Refining charge</th><th>Unitate charge</th></tr>
+              <tr><th>Metal</th><th>Metal payment %</th><th>Yield %</th><th>Min. deduction</th><th>Deduction unit</th><th>Refining charge</th><th>Charge unit</th></tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
 
-        <h3>Costuri generale</h3>
+        <h3>General costs</h3>
         <div class="table-wrap">
           <table class="grid rules">
-            <thead><tr><th>Cost</th><th>Valoare</th><th>Unitate</th></tr></thead>
+            <thead><tr><th>Cost</th><th>Value</th><th>Unit</th></tr></thead>
             <tbody>
               <tr><td>Treatment</td><td><input data-s="treatment" type="number" step="any"></td><td>€/dmt</td></tr>
-              <tr><td>Sampling lot &lt; prag</td><td><input data-s="samplingSmall" type="number" step="any"></td><td>€/lot</td></tr>
-              <tr><td>Sampling lot ≥ prag</td><td><input data-s="samplingLarge" type="number" step="any"></td><td>€/lot</td></tr>
+              <tr><td>Sampling lot &lt; threshold</td><td><input data-s="samplingSmall" type="number" step="any"></td><td>€/lot</td></tr>
+              <tr><td>Sampling lot ≥ threshold</td><td><input data-s="samplingLarge" type="number" step="any"></td><td>€/lot</td></tr>
             </tbody>
           </table>
         </div>
 
-        <h3>Reguli operative</h3>
+        <h3>Operating rules</h3>
         <ul class="howto">
-          <li><b>Metal total</b> = analiză × tone uscate (dmt). Au/Ag/Pt/Pd/Rh în g/t, Cu în %.</li>
-          <li><b>Deducție</b> = cea mai mare dintre <i>analiză × (1 − Yield)</i> și <i>Min. deduction</i>.
-            Analiza plătibilă = (analiză − deducție) × Metal payment %, niciodată sub 0.</li>
-          <li><b>Valoare metal</b> = metal plătibil × preț live Kitco (Bid, convertit în €/kg).</li>
-          <li><b>Refining charge</b> se aplică pe metalul plătibil (€/kg sau €/t de metal).</li>
-          <li><b>Treatment</b> = tarif × tone uscate. <b>Sampling</b> = tarif fix pe lot, în funcție de prag.</li>
-          <li><b>Total amount</b> = Σ valoare metal − Σ refining charges − treatment − sampling.</li>
-          <li>Pt și Rh nu aveau reguli în Excel — au fost puse ca la Pd; modifică-le aici dacă e nevoie.</li>
+          <li><b>Total metal</b> = analysis × dry tonnes (dmt). Au/Ag/Pt/Pd/Rh in g/t, Cu in %.</li>
+          <li><b>Deduction</b> = the greater of <i>analysis × (1 − Yield)</i> and <i>Min. deduction</i>.
+            Payable grade = (analysis − deduction) × Metal payment %, never below 0.</li>
+          <li><b>Metal value</b> = payable metal × live Kitco price (Bid, converted to €/kg).</li>
+          <li><b>Refining charge</b> applies to the payable metal (€/kg or €/t of metal).</li>
+          <li><b>Treatment</b> = rate × dry tonnes. <b>Sampling</b> = flat fee per lot, depending on the threshold.</li>
+          <li><b>Total amount</b> = Σ metal value − Σ refining charges − treatment − sampling.</li>
+          <li>Pt and Rh had no rules in the Excel file — they were set the same as Pd; change them here if needed.</li>
         </ul>
 
-        <h3>Prețuri</h3>
-        <p class="note">Sursa: Kitco (aceleași date ca pe kitco.com / Gold Live), coloana <b>Bid</b>, în EUR.
-          Metalele prețioase sunt convertite din €/oz troy (×32,1507) în €/kg, cuprul din €/lb (×2,2046) în €/kg.
-          Se actualizează automat la fiecare 60 de secunde. Dacă vrei să calculezi cu un preț fix, completează-l mai jos (gol = preț live).</p>
+        <h3>Prices</h3>
+        <p class="note">Source: Kitco (same data as kitco.com / Gold Live), <b>Bid</b> column, in EUR.
+          Precious metals are converted from €/troy oz (×32.1507) to €/kg, copper from €/lb (×2.2046) to €/kg.
+          Prices refresh automatically every 60 seconds. To calculate with a fixed price, enter it below (empty = live price).</p>
         <div class="table-wrap">
           <table class="grid rules" id="overrideTable">
-            <thead><tr><th>Metal</th><th>Preț live €/kg</th><th>Preț manual €/kg</th></tr></thead>
+            <thead><tr><th>Metal</th><th>Live price €/kg</th><th>Manual price €/kg</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
 
         <h3>Backup</h3>
         <div class="row-btns left">
-          <button id="btnExport" class="btn ghost">Exportă analizele (.json)</button>
-          <label class="btn ghost">Importă (.json)<input id="inImport" type="file" accept="application/json" hidden></label>
+          <button id="btnExport" class="btn ghost">Export analyses (.json)</button>
+          <label class="btn ghost">Import (.json)<input id="inImport" type="file" accept="application/json" hidden></label>
         </div>
-        <p class="note">Analizele și regulile se salvează în browserul în care lucrezi. Exportă-le din când în când ca să le poți muta pe alt calculator.</p>
+        <p class="note">Analyses and rules are saved in the browser you are using. Export them from time to time so you can move them to another computer.</p>
       </div>
     </section>
   </main>
