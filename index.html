@@ -35,6 +35,13 @@
             <button id="btnNew" class="btn primary">+ New</button>
           </div>
 
+          <div class="toolbar">
+            <button id="btnAddAn" class="tbtn" type="button"><b>＋</b><span>Add analysis</span></button>
+            <button id="btnAnList" class="tbtn" type="button"><b>☰</b><span>Analysis list</span></button>
+            <button id="btnBuild" class="tbtn" type="button"><b>⧉</b><span>Build lot</span></button>
+          </div>
+          <div id="compBox" class="compbox" hidden></div>
+
           <div class="grid2">
             <label class="field"><span>Lot ID</span><input id="f_lot" type="text" placeholder="e.g. lot#2243"></label>
             <label class="field"><span>Material</span><input id="f_material" type="text" placeholder="e.g. PCB mix"></label>
@@ -132,6 +139,61 @@
       </div>
     </section>
   </main>
+
+  <!-- ===== dialog: add / edit analysis ===== -->
+  <dialog id="dlgAn" class="sheet">
+    <form method="dialog" class="sheet-in" id="anForm">
+      <header class="sheet-h"><h2 id="anTitle">Add analysis</h2><button class="x big" value="cancel" aria-label="Close">×</button></header>
+      <div class="sheet-b">
+        <label class="field"><span>Category / name</span><input id="an_name" type="text" required placeholder="e.g. Laptop boards 2 Bga"></label>
+        <p class="note">Precious metals in <b>g/kg</b> (as in your analysis sheet; 1 g/kg = 1,000 g/t). Copper in %.</p>
+        <div class="grid2">
+          <label class="field metal"><span><b>Au</b> <i>g/kg</i></span><input id="an_au" type="number" min="0" step="any" inputmode="decimal"></label>
+          <label class="field metal"><span><b>Ag</b> <i>g/kg</i></span><input id="an_ag" type="number" min="0" step="any" inputmode="decimal"></label>
+          <label class="field metal"><span><b>Pd</b> <i>g/kg</i></span><input id="an_pd" type="number" min="0" step="any" inputmode="decimal"></label>
+          <label class="field metal"><span><b>Pt</b> <i>g/kg</i></span><input id="an_pt" type="number" min="0" step="any" inputmode="decimal"></label>
+          <label class="field metal"><span><b>Cu</b> <i>%</i></span><input id="an_cu" type="number" min="0" max="100" step="any" inputmode="decimal"></label>
+          <label class="field"><span>Notes</span><input id="an_notes" type="text"></label>
+        </div>
+      </div>
+      <footer class="sheet-f">
+        <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn primary" id="anSave" value="save">Save to list</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- ===== dialog: analysis list ===== -->
+  <dialog id="dlgList" class="sheet">
+    <div class="sheet-in">
+      <header class="sheet-h"><h2>Analysis list <small id="listCount"></small></h2><button class="x big" data-close aria-label="Close">×</button></header>
+      <div class="sheet-tools">
+        <input id="listSearch" type="search" placeholder="Search categories…">
+        <button class="btn primary" id="listAdd" type="button">+ Add</button>
+      </div>
+      <p class="note pad" id="listHint">Tap <b>Use</b> to load an analysis into the current lot. Values in g/kg · Cu %.</p>
+      <div class="sheet-b" id="listBody"></div>
+    </div>
+  </dialog>
+
+  <!-- ===== dialog: build lot ===== -->
+  <dialog id="dlgBuild" class="sheet wide">
+    <div class="sheet-in">
+      <header class="sheet-h"><h2>Build lot <small>mix categories</small></h2><button class="x big" data-close aria-label="Close">×</button></header>
+      <div class="sheet-b">
+        <div id="buildRows" class="brows"></div>
+        <div class="badd">
+          <select id="buildPick"><option value="">+ Add category from list…</option></select>
+          <button class="btn ghost" id="buildManual" type="button">+ Manual analysis</button>
+        </div>
+        <div id="buildSum" class="bsum"></div>
+      </div>
+      <footer class="sheet-f">
+        <button class="btn ghost" id="buildNewLot" type="button">Create as new lot</button>
+        <button class="btn primary" id="buildApply" type="button">Apply to current lot</button>
+      </footer>
+    </div>
+  </dialog>
 
   <button class="bestbar" id="bestBar" type="button">
     <span id="bestLbl">Best</span><strong id="bestVal">–</strong>

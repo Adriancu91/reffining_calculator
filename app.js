@@ -11,7 +11,7 @@
   const REFRESH_MS = 60 * 1000;
 
   // ---------- storage ----------
-  const K = { lots: "rc2_lots", cur: "rc2_current", terms: "rc2_terms", ovr: "rc2_price_override", fx: "rc2_fx", last: "rc2_last_prices", open: "rc2_open" };
+  const K = { lots: "rc2_lots", cur: "rc2_current", terms: "rc2_terms", ovr: "rc2_price_override", fx: "rc2_fx", last: "rc2_last_prices", open: "rc2_open", lib: "rc2_library" };
   const load = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -111,6 +111,7 @@
     FIELDS.forEach((k) => { $("#f_" + k).value = l[k] ?? ""; });
     $("#f_exempt").checked = !!l.exempt;
     updateMoreHint();
+    renderComp();
   }
   function updateMoreHint() {
     const l = cur();
@@ -436,9 +437,212 @@
   }
   $("#btnRefresh").addEventListener("click", fetchPrices);
 
+
+  // ================= ANALYSIS LIBRARY =================
+  // stored in g/t (Au, Ag, Pd, Pt) and Cu in %; the UI shows g/kg like the analysis sheet
+  const SEED = [
+    ["Gold Ram Memory", 0.85, 1.2, 0.035, 0.24], ["Silver Ram Memory", 0.41, 2.5, 0.23, 0.17],
+    ["hdd boards mixt", 0.438, 0.621, 0.02, 0.26], ["Laptop boards 2 Bga", 0.512, 1.78, 0.049, 0.29],
+    ["Only plastic cpu", 0.932, 0.16, 0.021, 0.29], ["INTEL i486 DX ceramic cpu", 9.85, 2.39, 0, 0.005],
+    ["cpu with metal back with pins", 0.45, 0.05, 0.015, 0.8], ["AMD K6 ceramic cpu", 1.32, 6.13, 0.056, 0.19],
+    ["Laptop boards 1 Bga", 0.351, 1.84, 0.016, 0.29], ["Old full phones no battery", 0.26, 1.3, 0.003, 0.11],
+    ["Smartphones without battery", 0.13, 0.75, 0.011, 0.09], ["Vga Cards with bga", 0.392, 0.958, 0.03, 0.22],
+    ["Vga cards Without Bga", 0.106, 0.668, 0.016, 0.19], ["laptop wi-fi Mix", 0.918, 3.1, 0.07, 0.3],
+    ["2 bga NG boards", 0.168, 0.38, 0.003, 0.21], ["1 Bga NG boards", 0.095, 0.545, 0.005, 0.21],
+    ["1 Bga with metal socket NG boards", 0.085, 0.82, 0.005, 0.22], ["Old generation 1-8 boards", 0.186, 0.683, 0.036, 0.21],
+    ["Old generation Mix boards", 0.178, 0.5, 0.048, 0.21], ["Class3 pw.supply boards", 0.004, 0.021, 0.002, 0.14],
+  ];
+  const r6 = (x) => Math.round(x * 1e6) / 1e6;
+  let library = load(K.lib, null);
+  if (!library) {
+    library = SEED.map(([name, au, ag, pd, cu], i) => ({ id: "seed" + i, name, au: r6(au * 1000), ag: r6(ag * 1000), pd: r6(pd * 1000), pt: 0, cuPct: r6(cu * 100), notes: "" }));
+    save(K.lib, library);
+  }
+  const saveLib = () => save(K.lib, library);
+  const gkg = (gt) => fN(num(gt) / 1000, 3);
+  const anSummary = (a) => `Au ${gkg(a.au)} · Ag ${gkg(a.ag)} · Pd ${gkg(a.pd)}${num(a.pt) ? " · Pt " + gkg(a.pt) : ""} · Cu ${fN(num(a.cuPct), 1)}%`;
+
+  // ---- add / edit analysis dialog ----
+  let anEditing = null, anAfterSave = null;
+  function openAnalysisDialog(item, afterSave) {
+    anEditing = item || null; anAfterSave = afterSave || null;
+    $("#anTitle").textContent = item ? "Edit analysis" : "Add analysis";
+    $("#an_name").value = item ? item.name : "";
+    ["au", "ag", "pd", "pt"].forEach((m) => { $("#an_" + m).value = item && num(item[m]) ? r6(num(item[m]) / 1000) : ""; });
+    $("#an_cu").value = item && num(item.cuPct) ? item.cuPct : "";
+    $("#an_notes").value = item ? item.notes || "" : "";
+    $("#dlgAn").showModal();
+    setTimeout(() => $("#an_name").focus(), 50);
+  }
+  $("#dlgAn").addEventListener("close", () => {
+    if ($("#dlgAn").returnValue !== "save") return;
+    const name = $("#an_name").value.trim(); if (!name) return;
+    const vals = { name, au: r6(num($("#an_au").value) * 1000), ag: r6(num($("#an_ag").value) * 1000), pd: r6(num($("#an_pd").value) * 1000),
+      pt: r6(num($("#an_pt").value) * 1000), cuPct: num($("#an_cu").value), notes: $("#an_notes").value };
+    let item;
+    if (anEditing) { item = Object.assign(anEditing, vals); }
+    else { item = Object.assign({ id: uid() }, vals); library.unshift(item); }
+    saveLib(); renderList(); fillBuildPick();
+    if (anAfterSave) anAfterSave(item);
+  });
+  $("#btnAddAn").addEventListener("click", () => openAnalysisDialog(null));
+
+  // ---- analysis list dialog ----
+  function renderList() {
+    const q = $("#listSearch").value.trim().toLowerCase();
+    const items = library.filter((a) => !q || a.name.toLowerCase().includes(q));
+    $("#listCount").textContent = `${library.length} categories`;
+    $("#listBody").innerHTML = items.length ? items.map((a) => `
+      <div class="litem" data-id="${a.id}">
+        <div class="lmain"><b>${esc(a.name)}</b><small>${anSummary(a)}${a.notes ? " · " + esc(a.notes) : ""}</small></div>
+        <div class="lbtns">
+          <button class="btn primary tiny" data-use="${a.id}">Use</button>
+          <button class="btn ghost tiny" data-edit="${a.id}" aria-label="Edit">Edit</button>
+          <button class="btn ghost tiny danger" data-delan="${a.id}" aria-label="Delete">×</button>
+        </div>
+      </div>`).join("") : `<p class="note pad">No analysis found.</p>`;
+    $$("#listBody [data-use]").forEach((b) => b.addEventListener("click", () => useAnalysis(library.find((a) => a.id === b.dataset.use))));
+    $$("#listBody [data-edit]").forEach((b) => b.addEventListener("click", () => openAnalysisDialog(library.find((a) => a.id === b.dataset.edit))));
+    $$("#listBody [data-delan]").forEach((b) => b.addEventListener("click", () => {
+      const a = library.find((x) => x.id === b.dataset.delan);
+      if (!confirm(`Delete "${a.name}" from the analysis list?`)) return;
+      library = library.filter((x) => x !== a); saveLib(); renderList(); fillBuildPick();
+    }));
+  }
+  function useAnalysis(a) {
+    const l = cur();
+    if (l.parts && l.parts.length && !confirm("This lot is built from several categories. Replace it with this single analysis?")) return;
+    delete l.parts;
+    Object.assign(l, { au: a.au, ag: a.ag, pd: a.pd, pt: a.pt, cuPct: a.cuPct, material: a.name });
+    persistLots(); loadForm(); render();
+    $("#dlgList").close();
+  }
+  $("#btnAnList").addEventListener("click", () => { $("#listSearch").value = ""; renderList(); $("#dlgList").showModal(); });
+  $("#listSearch").addEventListener("input", renderList);
+  $("#listAdd").addEventListener("click", () => openAnalysisDialog(null));
+
+  // ---- build lot (blend) ----
+  let draft = [];
+  const PM = ["au", "ag", "pd", "pt"];
+  function blend(parts) {
+    const kg = parts.reduce((s, p) => s + num(p.kg), 0);
+    const out = { kg };
+    PM.concat("cuPct").forEach((m) => { out[m] = kg > 0 ? parts.reduce((s, p) => s + num(p.kg) * num(p[m]), 0) / kg : 0; });
+    return out;
+  }
+  function fillBuildPick() {
+    $("#buildPick").innerHTML = `<option value="">+ Add category from list…</option>` +
+      library.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("");
+  }
+  function renderBuild() {
+    const total = blend(draft);
+    $("#buildRows").innerHTML = draft.length ? draft.map((p, i) => `
+      <div class="brow${p.manual ? " manual" : ""}">
+        <div class="brow-top">
+          ${p.manual ? `<input class="bname" data-pi="${i}" data-pk="name" type="text" value="${esc(p.name)}" placeholder="Name of this quantity">`
+                     : `<div class="bname"><b>${esc(p.name)}</b><small>${anSummary(p)}</small></div>`}
+          <label class="bkg"><input data-pi="${i}" data-pk="kg" type="number" min="0" step="any" inputmode="decimal" value="${p.kg}" placeholder="0"><i>kg</i></label>
+          <button class="x" data-prm="${i}" aria-label="Remove">×</button>
+        </div>
+        ${p.manual ? `<div class="bassay">
+            ${PM.map((m) => `<label><span>${MN[m]} g/kg</span><input data-pi="${i}" data-pk="${m}" data-gkg="1" type="number" min="0" step="any" inputmode="decimal" value="${num(p[m]) ? r6(num(p[m]) / 1000) : ""}"></label>`).join("")}
+            <label><span>Cu %</span><input data-pi="${i}" data-pk="cuPct" type="number" min="0" step="any" inputmode="decimal" value="${num(p.cuPct) || ""}"></label>
+          </div>
+          <button class="btn ghost tiny" data-psave="${i}" type="button">${p.libId ? "✓ in analysis list" : "Save to analysis list"}</button>` : ""}
+        <div class="bshare">${total.kg > 0 ? pctS(num(p.kg) / total.kg, 1) + " of lot" : ""}</div>
+      </div>`).join("") : `<p class="note pad">Add categories from your analysis list and enter the kg for each one, or add a manual analysis for a quantity that is not in the list.</p>`;
+    renderBuildSum();
+    $$("#buildRows [data-pk]").forEach((el) => el.addEventListener("input", () => {
+      const p = draft[+el.dataset.pi], k = el.dataset.pk;
+      p[k] = k === "name" ? el.value : el.dataset.gkg ? r6(num(el.value) * 1000) : el.value;
+      if (k !== "name") renderBuildSum();
+      if (k === "kg") $$("#buildRows .bshare").forEach((d, j) => { const t = blend(draft).kg; d.textContent = t > 0 ? pctS(num(draft[j].kg) / t, 1) + " of lot" : ""; });
+    }));
+    $$("#buildRows [data-prm]").forEach((b) => b.addEventListener("click", () => { draft.splice(+b.dataset.prm, 1); renderBuild(); }));
+    $$("#buildRows [data-psave]").forEach((b) => b.addEventListener("click", () => {
+      const p = draft[+b.dataset.psave];
+      if (!p.name.trim()) { alert("Give this analysis a name first."); return; }
+      if (p.libId) return;
+      const item = { id: uid(), name: p.name.trim(), au: num(p.au), ag: num(p.ag), pd: num(p.pd), pt: num(p.pt), cuPct: num(p.cuPct), notes: "" };
+      library.unshift(item); saveLib(); fillBuildPick(); p.libId = item.id; renderBuild();
+    }));
+  }
+  function renderBuildSum() {
+    const t = blend(draft);
+    $("#buildSum").innerHTML = `
+      <div class="bsum-h"><span>Total lot</span><b>${f2(t.kg)} kg</b></div>
+      <div class="bsum-g">
+        ${PM.map((m) => `<div><span>${MN[m]}</span><b>${fN(t[m] / 1000, 4)}</b><small>g/kg · ${fN(t[m], 1)} g/t</small></div>`).join("")}
+        <div><span>Cu</span><b>${fN(t.cuPct, 2)} %</b><small>weighted</small></div>
+      </div>
+      <p class="note">Weighted average: each category counts in proportion to its kg.</p>`;
+  }
+  $("#buildPick").addEventListener("change", (e) => {
+    const a = library.find((x) => x.id === e.target.value); e.target.value = "";
+    if (!a) return;
+    draft.push({ libId: a.id, name: a.name, kg: "", au: a.au, ag: a.ag, pd: a.pd, pt: a.pt, cuPct: a.cuPct });
+    renderBuild();
+    const ins = $$("#buildRows [data-pk=kg]"); ins[ins.length - 1]?.focus();
+  });
+  $("#buildManual").addEventListener("click", () => {
+    draft.push({ manual: true, name: "", kg: "", au: 0, ag: 0, pd: 0, pt: 0, cuPct: 0 });
+    renderBuild();
+    const ins = $$("#buildRows .bname"); ins[ins.length - 1]?.focus();
+  });
+  function applyDraft(l) {
+    const parts = draft.filter((p) => num(p.kg) > 0);
+    if (!parts.length) { alert("Enter the kg for at least one category."); return false; }
+    l.parts = clone(parts).map((p) => Object.assign(p, { kg: num(p.kg), name: p.name || "Manual analysis" }));
+    syncFromParts(l);
+    return true;
+  }
+  function syncFromParts(l) {
+    const t = blend(l.parts);
+    l.grossKg = r6(t.kg);
+    PM.forEach((m) => { l[m] = r6(t[m]); });
+    l.cuPct = r6(t.cuPct);
+    if (!l.material || l.material === "Blend") l.material = "Blend";
+  }
+  $("#buildApply").addEventListener("click", () => {
+    if (!applyDraft(cur())) return;
+    persistLots(); fillSelect(); loadForm(); render(); $("#dlgBuild").close();
+  });
+  $("#buildNewLot").addEventListener("click", () => {
+    const l = blankLot("lot#" + (lots.length + 1));
+    if (!applyDraft(l)) return;
+    lots.unshift(l); currentId = l.id; persistLots(); fillSelect(); loadForm(); render(); $("#dlgBuild").close();
+  });
+  function openBuild() {
+    const l = cur();
+    draft = l.parts ? clone(l.parts) : [];
+    fillBuildPick(); renderBuild(); $("#dlgBuild").showModal();
+  }
+  $("#btnBuild").addEventListener("click", openBuild);
+
+  // composition box on the lot card; weight & assay are locked while a lot is built from parts
+  function renderComp() {
+    const l = cur(), box = $("#compBox");
+    const locked = !!(l.parts && l.parts.length);
+    ["grossKg", "au", "ag", "pd", "pt", "cuPct"].forEach((k) => { $("#f_" + k).readOnly = locked; $("#f_" + k).closest(".field").classList.toggle("locked", locked); });
+    if (!locked) { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML = `<div class="comp-h"><b>Lot built from ${l.parts.length} categor${l.parts.length > 1 ? "ies" : "y"}</b>
+        <span><button class="btn tiny" id="compEdit" type="button">Edit</button><button class="btn tiny ghost" id="compUnlink" type="button" title="Keep the averages and type values by hand">Unlink</button></span></div>
+      <ul>${l.parts.map((p) => `<li><span>${esc(p.name)}</span><b>${f0(p.kg)} kg</b></li>`).join("")}</ul>`;
+    $("#compEdit").addEventListener("click", openBuild);
+    $("#compUnlink").addEventListener("click", () => {
+      if (!confirm("Unlink the composition? The average values stay and become editable.")) return;
+      delete l.parts; persistLots(); loadForm();
+    });
+  }
+
+  // close buttons inside dialogs + click on backdrop
+  $$("dialog [data-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
+  $$("dialog").forEach((d) => d.addEventListener("click", (e) => { if (e.target === d) d.close(); }));
+
   // ================= BACKUP =================
   $("#btnExport").addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify({ version: 2, lots, terms: termsOv, overrides, fx: fxCfg, exported: new Date().toISOString() }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ version: 3, lots, library, terms: termsOv, overrides, fx: fxCfg, exported: new Date().toISOString() }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = `refining-calculator-${today()}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -450,6 +654,11 @@
       const incoming = data.lots || [];
       const ids = new Set(lots.map((l) => l.id));
       incoming.forEach((l) => { if (!ids.has(l.id)) lots.push(Object.assign(blankLot(l.lot || "lot"), l)); });
+      if (Array.isArray(data.library)) {
+        const have = new Set(library.map((a) => a.id));
+        data.library.forEach((a) => { if (!have.has(a.id)) library.push(a); });
+        saveLib();
+      }
       if (data.terms && confirm("The file also contains refinery terms. Load them too?")) { termsOv = data.terms; save(K.terms, termsOv); }
       persistLots(); fillSelect(); renderRefChips(); renderTerms(); render();
       alert(`Imported ${incoming.length} lots.`);
