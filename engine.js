@@ -249,7 +249,7 @@
       "No platinum paid.",
     ],
     defaults: {
-      tc: 650, crush: 200, crushMm: 50, smallLot: 170, smallLotDmt: 1,
+      tc: 650, crush: 200, crushMm: 50, smallLot: 170, smallLotDmt: 1, exemptOk: "YES",
       alRate: 6, alThr: 0.06, alStep: 0.001, crRate: 15, crThr: 0.005, crStep: 0.001,
       rcBase: "PAYABLE", impMode: "PROPORTIONAL",
       au_factor: 0.98, ag_factor: 1, pd_factor: 0.95, cu_factor: 1,
@@ -268,6 +268,7 @@
         ["crushMm", "Crushing threshold", "mm", "num", "50 × 50 mm"],
         ["smallLot", "Small-lot surcharge", "USD/lot", "num", "not CPU/RAM/IC chip/memory"],
         ["smallLotDmt", "Small-lot threshold", "dmt", "num", "strictly less than"],
+        ["exemptOk", "CPU/RAM/IC exemption applies?", "", "sel:YES,NO", "small-lot surcharge waived for exempt items"],
         ["alRate", "Al penalty rate", "USD/dmt per step", "num", ""],
         ["alThr", "Al penalty threshold", "%", "pct", ""],
         ["alStep", "Al penalty step", "%", "pct", ""],
@@ -287,7 +288,8 @@
     ],
     calc(L, P, fx, T) {
       const metals = {};
-      ["au", "ag", "pd", "cu"].forEach((m) => {
+      const list = this.paid;
+      list.forEach((m) => {
         const r = bracket(T[m + "Br"], L[m]);
         const contained = m === "cu" ? L[m] * L.dryKg : L[m] * L.dmt;
         const qty = contained * r;
@@ -297,24 +299,89 @@
       const base = (m) => (T.rcBase === "CONTAINED" ? metals[m].contained : metals[m].qty);
       const steps = (v, thr, step) => { const s = Math.max(0, (v - thr) / step); return T.impMode === "ROUNDUP" ? Math.ceil(s) : s; };
       const crushOn = L.pieceMm > T.crushMm;
-      const smallOn = L.dmt < T.smallLotDmt && !L.exempt;
+      const exempt = L.exempt && T.exemptOk === "YES";
+      const smallOn = L.dmt < T.smallLotDmt && !exempt;
       const charges = [
         ch("Treatment charge", T.tc * L.dmt, `${T.tc} USD/dmt`),
         ch("Crushing charge", crushOn ? T.crush * L.dmt : 0, crushOn ? `pieces > ${T.crushMm} mm` : `pieces ≤ ${T.crushMm} mm — not charged`),
-        ch("Small-lot surcharge", smallOn ? T.smallLot : 0, smallOn ? `lot under ${T.smallLotDmt} dmt` : L.exempt && L.dmt < T.smallLotDmt ? "exempt item" : "not applicable"),
+        ch("Small-lot surcharge", smallOn ? T.smallLot : 0, smallOn ? `lot under ${T.smallLotDmt} dmt${L.exempt ? " (no exemption in this contract)" : ""}` : exempt && L.dmt < T.smallLotDmt ? "exempt item" : "not applicable"),
       ];
-      ["au", "ag", "pd", "cu"].forEach((m) => {
+      list.forEach((m) => {
         const on = L[m] < T[m + "_lim"];
         charges.push(ch(`${M[m]} low-grade extra`, on ? T[m + "_extra"] : 0, on ? `assay below ${m === "cu" ? pct(T[m + "_lim"]) : T[m + "_lim"] + " g/t"}` : "not applicable"));
       });
-      ["au", "ag", "pd", "cu"].forEach((m) => charges.push(ch(`${M[m]} refining charge`, base(m) * T[m + "_rc"], `${T[m + "_rc"]} USD/${m === "cu" ? "kg" : "g"} ${T.rcBase.toLowerCase()}`)));
+      list.forEach((m) => charges.push(ch(`${M[m]} refining charge`, base(m) * T[m + "_rc"], `${T[m + "_rc"]} USD/${m === "cu" ? "kg" : "g"} ${T.rcBase.toLowerCase()}`)));
       charges.push(ch("Al impurity penalty", steps(L.al, T.alThr, T.alStep) * T.alRate * L.dmt, L.al > T.alThr ? `Al above ${pct(T.alThr)}` : "not applicable"));
       charges.push(ch("Cr impurity penalty", steps(L.cr, T.crThr, T.crStep) * T.crRate * L.dmt, L.cr > T.crThr ? `Cr above ${pct(T.crThr)}` : "not applicable"));
       const warnings = [];
-      if (L.pt > 0) warnings.push("Platinum is not paid");
+      if (L.pt > 0 && !list.includes("pt")) warnings.push("Platinum is not paid");
       return finish(this, L, P, fx, metals, charges, { warnings });
     },
   };
+
+  // ---------------------------------------------------------------- HANWA 2
+  // Purchase confirmation A247-6X-073P (Hanwa Europe B.V. / Hanwa Co., Ltd.), 20 Oct 2026,
+  // Precious Metal Scrap low grade Cat 3-5, DDP MM Metal Recycling B.V. (Klundert, NL). Appendix 1.
+  const HANWA2 = Object.assign({}, HANWA, {
+    id: "hanwa2", name: "Hanwa2", currency: "USD",
+    paid: ["au", "ag", "pt", "pd", "cu"],
+    benchmarks: { au: "LBMA AM & PM monthly avg × 98 %", ag: "LBMA monthly avg × 100 %", pt: "LBMA PM monthly avg × 75 %", pd: "LBMA PM monthly avg × 95 %", cu: "Lowest official LME Grade A monthly avg × 100 %" },
+    notes: [
+      "Contract A247-6X-073P of 20 Oct 2026 — Precious Metal Scrap, low grade Cat 3, 4, 5. DDP MM Metal Recycling B.V. (Klundert, NL); delivery by end of Dec 2026, ±5 % weight allowance.",
+      "Payable = contained × recovery from the bracket table. Below the first bracket nothing is paid (Au < 10, Ag < 300, Pt < 50, Pd < 10 g/t, Cu < 10 %).",
+      "Pays platinum (60 % recovery from 50 g/t, at 75 % of the LBMA PM price).",
+      "Low-grade extra per lot is charged for every metal below its limit — read literally, also when the assay is 0 (e.g. a lot with no Pt pays the Pt extra). Confirm with Hanwa.",
+      "Small-lot surcharge for deliveries under 1 MT. This contract has NO CPU/RAM/IC exemption.",
+      "T/C is quoted 'US$ 400 /MT' — calculated per dry metric tonne, like the other Hanwa terms. Confirm the basis.",
+      "Al and Cr penalties: $6/dmt per 0.1 % Al above 6 %, $15/dmt per 0.1 % Cr above 0.5 % (proportional, as in the contract example).",
+      "Provisional payment: 50 % of provisional value within 8 banking days; final payment within 8 banking days of final invoice. QP = month of the cut-off date (Appendix 3).",
+    ],
+    defaults: {
+      tc: 400, crush: 150, crushMm: 50, smallLot: 170, smallLotDmt: 1, exemptOk: "NO",
+      alRate: 6, alThr: 0.06, alStep: 0.001, crRate: 15, crThr: 0.005, crStep: 0.001,
+      rcBase: "PAYABLE", impMode: "PROPORTIONAL", provPct: 0.5,
+      au_factor: 0.98, ag_factor: 1, pt_factor: 0.75, pd_factor: 0.95, cu_factor: 1,
+      au_rc: 0.85, ag_rc: 0.06, pt_rc: 5.5, pd_rc: 2.0, cu_rc: 0.5,
+      au_lim: 10, ag_lim: 300, pt_lim: 50, pd_lim: 10, cu_lim: 0.1,
+      au_extra: 80, ag_extra: 80, pt_extra: 80, pd_extra: 80, cu_extra: 50,
+      auBr: [[0, 0], [10, 0.85], [30, 0.9], [50, 0.94], [100, 0.95], [300, 0.96], [500, 0.97]],
+      agBr: [[0, 0], [300, 0.5], [500, 0.85], [1000, 0.9], [2000, 0.95]],
+      ptBr: [[0, 0], [50, 0.6]],
+      pdBr: [[0, 0], [10, 0.2], [15, 0.3], [20, 0.8]],
+      cuBr: [[0, 0], [0.1, 0.9]],
+    },
+    schema: [
+      { title: "Commercial terms", fields: [
+        ["tc", "Treatment charge (T/C)", "USD/dmt", "num", "contract: US$ 400 /MT"],
+        ["crush", "Crushing charge", "USD/dmt", "num", "material exceeding 50 × 50 mm"],
+        ["crushMm", "Crushing threshold", "mm", "num", "50 × 50 mm"],
+        ["smallLot", "Small-lot surcharge", "USD/lot", "num", "deliveries under 1 MT"],
+        ["smallLotDmt", "Small-lot threshold", "dmt", "num", "minimum delivery 1 MT"],
+        ["exemptOk", "CPU/RAM/IC exemption applies?", "", "sel:YES,NO", "not in this contract"],
+        ["alRate", "Al penalty rate", "USD/dmt per step", "num", "$6/dmt per 0.1 %"],
+        ["alThr", "Al penalty threshold", "%", "pct", "exceeding 6 %"],
+        ["alStep", "Al penalty step", "%", "pct", ""],
+        ["crRate", "Cr penalty rate", "USD/dmt per step", "num", "$15/dmt per 0.1 %"],
+        ["crThr", "Cr penalty threshold", "%", "pct", "exceeding 0.5 %"],
+        ["crStep", "Cr penalty step", "%", "pct", ""],
+        ["rcBase", "R/C applies to", "", "sel:PAYABLE,CONTAINED", ""],
+        ["impMode", "Impurity increments", "", "sel:PROPORTIONAL,ROUNDUP", "contract example is proportional"],
+        ["provPct", "Provisional payment", "%", "pct", "within 8 banking days (info only)"],
+      ]},
+      { title: "Metal terms", metals: ["au", "ag", "pt", "pd", "cu"], cols: [
+        ["factor", "Price factor", "%", "pct"], ["rc", "Refining charge", "USD/g · Cu USD/kg", "num"],
+        ["lim", "Low-grade limit", "g/t · Cu %", "auto"], ["extra", "Low-grade extra", "USD/lot", "num"],
+      ]},
+      { title: "Recovery brackets (from → recovery)", brackets: [
+        ["auBr", "Au", "g/t", "num"], ["agBr", "Ag", "g/t", "num"], ["ptBr", "Pt", "g/t", "num"], ["pdBr", "Pd", "g/t", "num"], ["cuBr", "Cu", "%", "pct"],
+      ]},
+    ],
+    calc(L, P, fx, T) {
+      const res = HANWA.calc.call(this, L, P, fx, T);
+      res.info.push(["Provisional payment " + pct(T.provPct), res.net * T.provPct, "USD"]);
+      return res;
+    },
+  });
 
   // ---------------------------------------------------------------- UMICORE
   const UMICORE = {
@@ -596,7 +663,7 @@
     return L;
   }
 
-  const REFINERIES = [ASAHI, DOWA, PEDALPOINT, HANWA, UMICORE, TECHEMET, AURUBIS];
+  const REFINERIES = [ASAHI, DOWA, PEDALPOINT, HANWA, HANWA2, UMICORE, TECHEMET, AURUBIS];
 
   function runAll(lot, prices, fx, termsById) {
     const L = prepareLot(lot);
