@@ -1,6 +1,6 @@
 # Refining Calculator
 
-Compares the settlement of an e-scrap / PCB lot across **8 refineries** — Asahi, Dowa, PedalPoint, Hanwa, Hanwa2 (contract A247-6X-073P), Umicore (via Green Auto Recycling), Techemet, Aurubis — with live Kitco **Bid** prices.
+Compares the settlement of an e-scrap / PCB lot across **9 refineries** — Asahi, Dowa, PedalPoint, Hanwa, Hanwa2 (contract A247-6X-073P), Umicore (via Green Auto Recycling), Techemet, Aurubis, LS Korea (simulation file) — with live Kitco **Bid** prices.
 
 **Site:** https://adriancu91.github.io/reffining_calculator/
 

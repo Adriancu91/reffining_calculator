@@ -553,6 +553,59 @@
     },
   };
 
+  // ---------------------------------------------------------------- LS KOREA
+  // From "LS_KOREA_Simulationkg.xlsx" — Sample Settlement (Low grade material), sheets "1" and "Calculation".
+  const LSKOREA = {
+    id: "lskorea", name: "LS KOREA", currency: "USD",
+    paid: ["au", "ag", "pd", "cu"],
+    benchmarks: { au: "not stated in the simulation", ag: "not stated", pd: "not stated", cu: "not stated (USD/lb)" },
+    notes: [
+      "Source: LS Korea sample settlement for low-grade material (simulation file, not a signed contract).",
+      "Payable = MIN(assay − minimum deduction, assay × recovery rate)  (lower-of rule), never below 0. Cu deduction is in percentage points.",
+      "Treatment charge is per WET metric tonne (the simulation multiplies 600 $/t by WMT). Metal is paid on dry tonnes.",
+      "Refining charges on payable metal: Au 0.40 $/g, Ag 0.03 $/g, Pd 1.00 $/g, Cu 0.10 $/lb.",
+      "No sampling, lot, shredding or impurity charges appear in the simulation — confirm with LS Korea. No platinum paid.",
+      "The simulation labels its unit price 'EUR/kg' but it is calculated in USD; the site converts USD to EUR with the live rate.",
+      "Prices in the file (Au 3,682.68 $/toz, Ag 54.92, Pd 1,115.07, Cu 5.60 $/lb) are example prices — the site uses live Kitco bid.",
+    ],
+    defaults: {
+      tc: 600, tcBasis: "WET",
+      au_min: 5, ag_min: 100, pd_min: 8, cu_min: 0.05,
+      au_rec: 0.94, ag_rec: 0.96, pd_rec: 0.9, cu_rec: 0.94,
+      au_rc: 0.4, ag_rc: 0.03, pd_rc: 1, cu_rc: 0.1,
+      au_factor: 1, ag_factor: 1, pd_factor: 1, cu_factor: 1,
+    },
+    schema: [
+      { title: "Commercial terms", fields: [
+        ["tc", "Treatment charge", "USD/t", "num", "per metric tonne"],
+        ["tcBasis", "Treatment charged on", "", "sel:WET,DRY", "simulation uses wet tonnes (WMT)"],
+      ]},
+      { title: "Metal terms", metals: ["au", "ag", "pd", "cu"], cols: [
+        ["min", "Min. deduction", "g/t · Cu % points", "auto"], ["rec", "Recovery rate", "%", "pct"],
+        ["rc", "R/C", "USD/g · Cu USD/lb", "num"], ["factor", "Price factor", "%", "pct"],
+      ]},
+    ],
+    calc(L, P, fx, T) {
+      const metals = {};
+      ["au", "ag", "pd", "cu"].forEach((m) => {
+        const g = Math.max(0, Math.min(L[m] - T[m + "_min"], L[m] * T[m + "_rec"]));
+        const qty = m === "cu" ? g * L.dryKg : g * L.dmt;      // g ; Cu kg
+        const price = P[m] * T[m + "_factor"];
+        metals[m] = { payGrade: g, qty, qtyUnit: m === "cu" ? "kg" : "g", price, priceUnit: m === "cu" ? "USD/kg" : "USD/g", value: qty * price,
+          rule: `lower of −${m === "cu" ? pct(T[m + "_min"]) : T[m + "_min"] + " g/t"} or ${pct(T[m + "_rec"])}` };
+      });
+      const tonnes = T.tcBasis === "DRY" ? L.dmt : L.grossKg / 1000;
+      const charges = [
+        ch("Treatment charge", T.tc * tonnes, `${T.tc} USD/${T.tcBasis === "DRY" ? "dmt" : "wmt"}`),
+        ch("Au refining charge", metals.au.qty * T.au_rc, `${T.au_rc} USD/g payable`),
+        ch("Ag refining charge", metals.ag.qty * T.ag_rc, `${T.ag_rc} USD/g payable`),
+        ch("Pd refining charge", metals.pd.qty * T.pd_rc, `${T.pd_rc} USD/g payable`),
+        ch("Cu refining charge", metals.cu.qty * LB_PER_KG * T.cu_rc, `${T.cu_rc} USD/lb payable`),
+      ];
+      return finish(this, L, P, fx, metals, charges, { warnings: L.pt > 0 ? ["Platinum is not paid"] : [] });
+    },
+  };
+
   // ---------------------------------------------------------------- AURUBIS
   const AURUBIS = {
     id: "aurubis", name: "Aurubis", currency: "EUR",
@@ -663,7 +716,7 @@
     return L;
   }
 
-  const REFINERIES = [ASAHI, DOWA, PEDALPOINT, HANWA, HANWA2, UMICORE, TECHEMET, AURUBIS];
+  const REFINERIES = [ASAHI, DOWA, PEDALPOINT, HANWA, HANWA2, UMICORE, TECHEMET, AURUBIS, LSKOREA];
 
   function runAll(lot, prices, fx, termsById) {
     const L = prepareLot(lot);
